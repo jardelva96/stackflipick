@@ -69,7 +69,20 @@ public class VersionManagerApp extends Application {
         mainCard.setMaxWidth(750);
         mainCard.setAlignment(Pos.CENTER);
 
-        Label title = new Label("⚙️ Gerenciador de Versões");
+        // Logo no topo
+        try {
+            javafx.scene.image.Image logo = new javafx.scene.image.Image(
+                getClass().getResourceAsStream("/images/app-logo.png"));
+            javafx.scene.image.ImageView logoView = new javafx.scene.image.ImageView(logo);
+            logoView.setFitWidth(100);
+            logoView.setFitHeight(100);
+            logoView.setPreserveRatio(true);
+            mainCard.getChildren().add(logoView);
+        } catch (Exception e) {
+            // Se não carregar logo, apenas continua
+        }
+
+        Label title = new Label("StackFlipick");
         title.setFont(Font.font("Segoe UI", FontWeight.BOLD, 32));
         title.setTextFill(Color.web("#667eea"));
         
@@ -84,13 +97,13 @@ public class VersionManagerApp extends Application {
         grid.setAlignment(Pos.CENTER);
 
         // Linha 1: Java, Node, .NET
-        grid.add(createTechCard("☕", "Java", "#f89820", this::showJavaManager), 0, 0);
-        grid.add(createTechCard("🟢", "Node.js", "#68a063", this::showNodeManager), 1, 0);
-        grid.add(createTechCard("🔷", ".NET", "#512bd4", this::showDotNetManager), 2, 0);
+        grid.add(createTechCard("java-icon.png", "Java", "#f89820", this::showJavaManager), 0, 0);
+        grid.add(createTechCard("nodejs-icon.png", "Node.js", "#68a063", this::showNodeManager), 1, 0);
+        grid.add(createTechCard("dotnet-icon.png", ".NET", "#512bd4", this::showDotNetManager), 2, 0);
         
         // Linha 2: Python, Maven
-        grid.add(createTechCard("🐍", "Python", "#3776ab", this::showPythonManager), 0, 1);
-        grid.add(createTechCard("📦", "Maven", "#c71a36", this::showMavenManager), 1, 1);
+        grid.add(createTechCard("python-icon.png", "Python", "#3776ab", this::showPythonManager), 0, 1);
+        grid.add(createTechCard("maven-icon.png", "Maven", "#c71a36", this::showMavenManager), 1, 1);
 
         mainCard.getChildren().addAll(title, subtitle, grid);
         
@@ -100,7 +113,7 @@ public class VersionManagerApp extends Application {
         primaryStage.setScene(scene);
     }
 
-    private VBox createTechCard(String icon, String name, String color, Runnable onClick) {
+    private VBox createTechCard(String imageName, String name, String color, Runnable onClick) {
         VBox card = new VBox(10);
         card.setPadding(new Insets(25));
         card.setAlignment(Pos.CENTER);
@@ -110,14 +123,31 @@ public class VersionManagerApp extends Application {
             "-fx-cursor: hand; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 10, 0, 0, 3);", color));
         card.setPrefSize(220, 180);
 
-        Label iconLabel = new Label(icon);
-        iconLabel.setFont(Font.font(60));
-        
-        Label nameLabel = new Label(name);
-        nameLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 18));
-        nameLabel.setTextFill(Color.web(color));
+        // Carregar imagem do resources
+        try {
+            javafx.scene.image.Image image = new javafx.scene.image.Image(
+                getClass().getResourceAsStream("/images/" + imageName));
+            javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView(image);
+            imageView.setFitWidth(80);
+            imageView.setFitHeight(80);
+            imageView.setPreserveRatio(true);
+            
+            Label nameLabel = new Label(name);
+            nameLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 18));
+            nameLabel.setTextFill(Color.web(color));
 
-        card.getChildren().addAll(iconLabel, nameLabel);
+            card.getChildren().addAll(imageView, nameLabel);
+        } catch (Exception e) {
+            // Fallback para emoji se imagem não carregar
+            Label iconLabel = new Label("⚙");
+            iconLabel.setFont(Font.font(60));
+            
+            Label nameLabel = new Label(name);
+            nameLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 18));
+            nameLabel.setTextFill(Color.web(color));
+
+            card.getChildren().addAll(iconLabel, nameLabel);
+        }
 
         final String baseStyle = card.getStyle();
         card.setOnMouseEntered(e -> 
