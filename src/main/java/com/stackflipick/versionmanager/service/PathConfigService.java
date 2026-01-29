@@ -1,6 +1,6 @@
-package br.gov.sc.detran.versionmanager.service;
+package com.stackflipick.versionmanager.service;
 
-import br.gov.sc.detran.versionmanager.config.ConfigManager;
+import com.stackflipick.versionmanager.config.ConfigManager;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
@@ -123,3 +123,4 @@ public class PathConfigService {
         }
     }
 }
+

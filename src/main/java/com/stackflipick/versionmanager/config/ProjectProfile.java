@@ -1,4 +1,4 @@
-package br.gov.sc.detran.versionmanager.config;
+package com.stackflipick.versionmanager.config;
 
 /**
  * Data class - Representa um perfil de projeto.
@@ -22,3 +22,4 @@ public class ProjectProfile {
         this.versionPath = versionPath;
     }
 }
+

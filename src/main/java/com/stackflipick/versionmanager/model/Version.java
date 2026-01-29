@@ -1,4 +1,4 @@
-package br.gov.sc.detran.versionmanager.model;
+package com.stackflipick.versionmanager.model;
 
 /**
  * Classe abstrata base para todas as versões de tecnologias.
@@ -53,3 +53,4 @@ public abstract class Version {
         return name + " (" + version + ")";
     }
 }
+

@@ -1,7 +1,7 @@
-package br.gov.sc.detran.versionmanager.service;
+package com.stackflipick.versionmanager.service;
 
-import br.gov.sc.detran.versionmanager.config.ConfigManager;
-import br.gov.sc.detran.versionmanager.model.*;
+import com.stackflipick.versionmanager.config.ConfigManager;
+import com.stackflipick.versionmanager.model.*;
 
 /**
  * Service layer - Responsável por aplicar mudanças de versão.
@@ -98,3 +98,4 @@ public class VersionSwitchService {
         }
     }
 }
+

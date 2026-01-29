@@ -1,6 +1,6 @@
-package br.gov.sc.detran.versionmanager.detector;
+package com.stackflipick.versionmanager.detector;
 
-import br.gov.sc.detran.versionmanager.model.Version;
+import com.stackflipick.versionmanager.model.Version;
 import java.util.List;
 
 /**
@@ -31,3 +31,4 @@ public interface VersionDetector<T extends Version> {
      */
     boolean validateVersion(String versionPath);
 }
+

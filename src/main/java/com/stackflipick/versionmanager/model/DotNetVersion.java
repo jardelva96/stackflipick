@@ -1,4 +1,4 @@
-package br.gov.sc.detran.versionmanager.model;
+package com.stackflipick.versionmanager.model;
 
 public class DotNetVersion extends Version {
     
@@ -16,3 +16,4 @@ public class DotNetVersion extends Version {
         return "🔷";
     }
 }
+

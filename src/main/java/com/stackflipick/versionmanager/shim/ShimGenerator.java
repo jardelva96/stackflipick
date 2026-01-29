@@ -1,6 +1,6 @@
-package br.gov.sc.detran.versionmanager.shim;
+package com.stackflipick.versionmanager.shim;
 
-import br.gov.sc.detran.versionmanager.config.ConfigManager;
+import com.stackflipick.versionmanager.config.ConfigManager;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -112,3 +112,4 @@ public class ShimGenerator {
         return configManager.areShimsInstalled();
     }
 }
+

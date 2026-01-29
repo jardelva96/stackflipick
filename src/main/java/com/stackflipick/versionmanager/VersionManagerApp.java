@@ -1,4 +1,4 @@
-package br.gov.sc.detran.versionmanager;
+package com.stackflipick.versionmanager;
 
 import javafx.application.Application;
 import javafx.geometry.Insets;
@@ -1853,3 +1853,4 @@ public class VersionManagerApp extends Application {
         launch(args);
     }
 }
+

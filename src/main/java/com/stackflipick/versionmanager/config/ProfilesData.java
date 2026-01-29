@@ -1,4 +1,4 @@
-package br.gov.sc.detran.versionmanager.config;
+package com.stackflipick.versionmanager.config;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -9,3 +9,4 @@ import java.util.List;
 public class ProfilesData {
     public List<ProjectProfile> profiles = new ArrayList<>();
 }
+

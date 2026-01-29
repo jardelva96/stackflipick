@@ -1,4 +1,4 @@
-package br.gov.sc.detran.versionmanager.config;
+package com.stackflipick.versionmanager.config;
 
 import java.io.File;
 import java.io.IOException;
@@ -111,3 +111,4 @@ public class ConfigManager {
         return configDir;
     }
 }
+

@@ -1,7 +1,7 @@
-package br.gov.sc.detran.versionmanager.detector;
+package com.stackflipick.versionmanager.detector;
 
-import br.gov.sc.detran.versionmanager.config.ConfigManager;
-import br.gov.sc.detran.versionmanager.model.JavaVersion;
+import com.stackflipick.versionmanager.config.ConfigManager;
+import com.stackflipick.versionmanager.model.JavaVersion;
 import java.io.File;
 
 /**
@@ -65,3 +65,4 @@ public class JavaVersionDetector extends AbstractVersionDetector<JavaVersion> {
         return "JAVA";
     }
 }
+
