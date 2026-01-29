@@ -111,7 +111,7 @@ public class VersionManagerApp extends Application {
         // Linha 2: Python, Maven, Perfis
         grid.add(createTechCard("python-icon.png", "Python", "#3776ab", this::showPythonManager), 0, 1);
         grid.add(createTechCard("maven-icon.png", "Maven", "#c71a36", this::showMavenManager), 1, 1);
-        grid.add(createTechCard("app-logo.png", "Perfis", "#667eea", this::showProjectProfiles), 2, 1);
+        grid.add(createTechCard("app-logo.png", "Auto Switch", "#667eea", this::showProjectProfiles), 2, 1);
 
         mainCard.getChildren().addAll(title, subtitle, grid);
         
@@ -228,28 +228,59 @@ public class VersionManagerApp extends Application {
         backButton.setOnMouseExited(e -> backButton.setStyle("-fx-background-color: #667eea; -fx-background-radius: 20; -fx-cursor: hand;"));
         backButton.setOnAction(e -> showMainMenu());
 
-        Label titleLabel = new Label("📁 Perfis de Projeto");
+        Label titleLabel = new Label("� Auto Switch");
         titleLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 24));
         titleLabel.setTextFill(Color.web("#667eea"));
 
         header.getChildren().addAll(backButton, titleLabel);
 
-        // Botão adicionar novo perfil
-        Button addButton = new Button("➕ Novo Perfil");
-        addButton.setFont(Font.font("Segoe UI", FontWeight.BOLD, 14));
-        addButton.setTextFill(Color.WHITE);
-        addButton.setPadding(new Insets(10, 25, 10, 25));
-        addButton.setStyle("-fx-background-color: linear-gradient(to right, #11998e, #38ef7d); -fx-background-radius: 20; -fx-cursor: hand;");
-        addButton.setOnMouseEntered(e -> addButton.setStyle("-fx-background-color: linear-gradient(to right, #0d8070, #2fd069); -fx-background-radius: 20; -fx-cursor: hand;"));
-        addButton.setOnMouseExited(e -> addButton.setStyle("-fx-background-color: linear-gradient(to right, #11998e, #38ef7d); -fx-background-radius: 20; -fx-cursor: hand;"));
-        addButton.setOnAction(e -> showAddProfileDialog());
+        // Info Box
+        VBox infoBox = new VBox(10);
+        infoBox.setPadding(new Insets(15));
+        infoBox.setStyle("-fx-background-color: #e3f2fd; -fx-background-radius: 10; -fx-border-color: #2196f3; -fx-border-width: 2; -fx-border-radius: 10;");
+        
+        Label infoTitle = new Label("💡 Como Funciona");
+        infoTitle.setFont(Font.font("Segoe UI", FontWeight.BOLD, 14));
+        infoTitle.setTextFill(Color.web("#1976d2"));
+        
+        Label infoText = new Label(
+            "1. Configure os shims/wrappers do StackFlipick\n" +
+            "2. Crie arquivo .java-version em seus projetos\n" +
+            "3. O Java será selecionado automaticamente por pasta!\n\n" +
+            "Exemplo: echo 17 > .java-version"
+        );
+        infoText.setFont(Font.font("Segoe UI", 12));
+        infoText.setTextFill(Color.web("#424242"));
+        infoText.setWrapText(true);
+        
+        infoBox.getChildren().addAll(infoTitle, infoText);
+
+        // Botões de configuração
+        HBox buttonsRow = new HBox(10);
+        buttonsRow.setAlignment(Pos.CENTER);
+        
+        Button installShimsBtn = new Button("🔧 Instalar Shims");
+        installShimsBtn.setFont(Font.font("Segoe UI", FontWeight.BOLD, 14));
+        installShimsBtn.setTextFill(Color.WHITE);
+        installShimsBtn.setPadding(new Insets(10, 25, 10, 25));
+        installShimsBtn.setStyle("-fx-background-color: linear-gradient(to right, #11998e, #38ef7d); -fx-background-radius: 20; -fx-cursor: hand;");
+        installShimsBtn.setOnAction(e -> installJavaShims());
+        
+        Button addProfileBtn = new Button("➕ Criar .java-version");
+        addProfileBtn.setFont(Font.font("Segoe UI", FontWeight.BOLD, 14));
+        addProfileBtn.setTextFill(Color.WHITE);
+        addProfileBtn.setPadding(new Insets(10, 25, 10, 25));
+        addProfileBtn.setStyle("-fx-background-color: #667eea; -fx-background-radius: 20; -fx-cursor: hand;");
+        addProfileBtn.setOnAction(e -> showAddProfileDialog());
+        
+        buttonsRow.getChildren().addAll(installShimsBtn, addProfileBtn);
 
         // Container de perfis
         VBox profilesContainer = new VBox(15);
         profilesContainer.setPadding(new Insets(10));
         
         if (projectProfiles.isEmpty()) {
-            Label emptyLabel = new Label("Nenhum perfil configurado.\nClique em 'Novo Perfil' para começar!");
+            Label emptyLabel = new Label("Nenhum projeto configurado ainda.\nInstale os shims e crie seu primeiro .java-version!");
             emptyLabel.setFont(Font.font("Segoe UI", 14));
             emptyLabel.setTextFill(Color.web("#999999"));
             emptyLabel.setWrapText(true);
@@ -261,12 +292,131 @@ public class VersionManagerApp extends Application {
             }
         }
 
-        mainCard.getChildren().addAll(header, addButton, profilesContainer);
+        mainCard.getChildren().addAll(header, infoBox, buttonsRow, profilesContainer);
         scrollPane.setContent(mainCard);
         root.getChildren().add(scrollPane);
         
         Scene scene = new Scene(root, 850, 680);
         primaryStage.setScene(scene);
+    }
+    
+    private void installJavaShims() {
+        try {
+            String userHome = System.getProperty("user.home");
+            File shimsDir = new File(userHome, ".stackflipick\\shims");
+            shimsDir.mkdirs();
+            
+            // Criar java.bat
+            String javaBat = generateJavaShimBatch();
+            Files.write(new File(shimsDir, "java.bat").toPath(), javaBat.getBytes());
+            
+            // Criar javac.bat
+            String javacBat = generateJavacShimBatch();
+            Files.write(new File(shimsDir, "javac.bat").toPath(), javacBat.getBytes());
+            
+            // Criar javaw.bat
+            String javawBat = generateJavawShimBatch();
+            Files.write(new File(shimsDir, "javaw.bat").toPath(), javawBat.getBytes());
+            
+            // Criar PowerShell wrapper
+            String ps1 = generateJavaShimPowerShell();
+            Files.write(new File(shimsDir, "java-wrapper.ps1").toPath(), ps1.getBytes());
+            
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Shims Instalados!");
+            alert.setHeaderText("Configuração automática ativada!");
+            alert.setContentText(
+                "Shims criados em: " + shimsDir.getAbsolutePath() + "\n\n" +
+                "IMPORTANTE: Adicione ao PATH:\n" +
+                shimsDir.getAbsolutePath() + "\n\n" +
+                "Abra as configurações do sistema e adicione esse caminho\n" +
+                "no início da variável PATH do usuário."
+            );
+            alert.showAndWait();
+            
+        } catch (Exception e) {
+            Alert alert = new Alert(Alert.AlertType.ERROR, "Erro ao instalar shims: " + e.getMessage());
+            alert.showAndWait();
+        }
+    }
+    
+    private String generateJavaShimBatch() {
+        return "@echo off\n" +
+               "setlocal enabledelayedexpansion\n" +
+               "\n" +
+               "REM Procura .java-version subindo na árvore de diretórios\n" +
+               "set \"current_dir=%CD%\"\n" +
+               ":search\n" +
+               "if exist \"%current_dir%\\.java-version\" (\n" +
+               "    set /p version=<\"%current_dir%\\.java-version\"\n" +
+               "    goto found\n" +
+               ")\n" +
+               "for %%I in (\"%current_dir%\\..\") do set \"parent=%%~fI\"\n" +
+               "if \"%current_dir%\"==\"%parent%\" goto notfound\n" +
+               "set \"current_dir=%parent%\"\n" +
+               "goto search\n" +
+               "\n" +
+               ":found\n" +
+               "REM Carrega config de versões\n" +
+               "set config_file=%USERPROFILE%\\.stackflipick\\profiles.json\n" +
+               "if exist \"%config_file%\" (\n" +
+               "    powershell -ExecutionPolicy Bypass -File \"%USERPROFILE%\\.stackflipick\\shims\\java-wrapper.ps1\" %*\n" +
+               "    exit /b !ERRORLEVEL!\n" +
+               ")\n" +
+               "\n" +
+               ":notfound\n" +
+               "REM Se não encontrou, usa o Java padrão\n" +
+               "if defined JAVA_HOME (\n" +
+               "    \"%JAVA_HOME%\\bin\\java.exe\" %*\n" +
+               ") else (\n" +
+               "    java.exe %*\n" +
+               ")\n";
+    }
+    
+    private String generateJavacShimBatch() {
+        return generateJavaShimBatch().replace("java.exe", "javac.exe");
+    }
+    
+    private String generateJavawShimBatch() {
+        return generateJavaShimBatch().replace("java.exe", "javaw.exe");
+    }
+    
+    private String generateJavaShimPowerShell() {
+        return "# StackFlipick Java Wrapper\n" +
+               "$version = $null\n" +
+               "$current = Get-Location\n" +
+               "\n" +
+               "while ($true) {\n" +
+               "    $versionFile = Join-Path $current '.java-version'\n" +
+               "    if (Test-Path $versionFile) {\n" +
+               "        $version = Get-Content $versionFile -Raw | ForEach-Object { $_.Trim() }\n" +
+               "        break\n" +
+               "    }\n" +
+               "    $parent = Split-Path $current -Parent\n" +
+               "    if (-not $parent -or $parent -eq $current) { break }\n" +
+               "    $current = $parent\n" +
+               "}\n" +
+               "\n" +
+               "if ($version) {\n" +
+               "    # Carrega config\n" +
+               "    $config = Get-Content \"$env:USERPROFILE\\.stackflipick\\profiles.json\" | ConvertFrom-Json\n" +
+               "    $profile = $config.profiles | Where-Object { $_.techType -eq 'java' -and $_.versionName -like \"*$version*\" } | Select-Object -First 1\n" +
+               "    \n" +
+               "    if ($profile) {\n" +
+               "        $javaCmd = Join-Path $profile.versionPath 'bin\\java.exe'\n" +
+               "        if (Test-Path $javaCmd) {\n" +
+               "            & $javaCmd $args\n" +
+               "            exit $LASTEXITCODE\n" +
+               "        }\n" +
+               "    }\n" +
+               "}\n" +
+               "\n" +
+               "# Fallback\n" +
+               "if ($env:JAVA_HOME) {\n" +
+               "    & \"$env:JAVA_HOME\\bin\\java.exe\" $args\n" +
+               "} else {\n" +
+               "    java.exe $args\n" +
+               "}\n";
     }
 
     private VBox createProfileCard(ProjectProfile profile, VBox parentContainer) {
@@ -286,67 +436,69 @@ public class VersionManagerApp extends Application {
         pathLabel.setWrapText(true);
 
         // Tecnologia e versão
-        Label techLabel = new Label(getTechEmoji(profile.techType) + " " + profile.techType.toUpperCase() + " → " + profile.versionName);
+        Label techLabel = new Label("☕ JAVA → Versão " + profile.versionName);
         techLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 13));
         techLabel.setTextFill(Color.web("#11998e"));
+        
+        // Status do arquivo
+        File versionFile = new File(profile.projectPath, ".java-version");
+        Label statusLabel = new Label(versionFile.exists() ? "✅ .java-version criado" : "⚠️ .java-version não existe");
+        statusLabel.setFont(Font.font("Segoe UI", 11));
+        statusLabel.setTextFill(versionFile.exists() ? Color.web("#28a745") : Color.web("#ffc107"));
 
         // Botões
         HBox buttonsBox = new HBox(10);
         buttonsBox.setAlignment(Pos.CENTER_LEFT);
 
-        Button generateScriptBtn = new Button("📜 Gerar Scripts");
-        generateScriptBtn.setFont(Font.font("Segoe UI", 11));
-        generateScriptBtn.setPadding(new Insets(6, 15, 6, 15));
-        generateScriptBtn.setStyle("-fx-background-color: #667eea; -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;");
-        generateScriptBtn.setOnMouseEntered(e -> generateScriptBtn.setStyle("-fx-background-color: derive(#667eea, -15%); -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;"));
-        generateScriptBtn.setOnMouseExited(e -> generateScriptBtn.setStyle("-fx-background-color: #667eea; -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;"));
-        generateScriptBtn.setOnAction(e -> generateActivationScripts(profile));
+        Button openFolderBtn = new Button("📂 Abrir Pasta");
+        openFolderBtn.setFont(Font.font("Segoe UI", 11));
+        openFolderBtn.setPadding(new Insets(6, 15, 6, 15));
+        openFolderBtn.setStyle("-fx-background-color: #667eea; -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;");
+        openFolderBtn.setOnAction(e -> {
+            try {
+                Runtime.getRuntime().exec("explorer.exe " + profile.projectPath);
+            } catch (Exception ex) {
+                Alert alert = new Alert(Alert.AlertType.ERROR, "Erro ao abrir pasta: " + ex.getMessage());
+                alert.showAndWait();
+            }
+        });
 
         Button deleteBtn = new Button("🗑 Remover");
         deleteBtn.setFont(Font.font("Segoe UI", 11));
         deleteBtn.setPadding(new Insets(6, 15, 6, 15));
         deleteBtn.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;");
-        deleteBtn.setOnMouseEntered(e -> deleteBtn.setStyle("-fx-background-color: derive(#dc3545, -15%); -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;"));
-        deleteBtn.setOnMouseExited(e -> deleteBtn.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;"));
         deleteBtn.setOnAction(e -> {
             projectProfiles.remove(profile);
             saveProfiles();
             parentContainer.getChildren().remove(card);
             if (projectProfiles.isEmpty()) {
-                showProjectProfiles(); // Recarregar para mostrar mensagem vazia
+                showProjectProfiles();
             }
         });
 
-        buttonsBox.getChildren().addAll(generateScriptBtn, deleteBtn);
+        buttonsBox.getChildren().addAll(openFolderBtn, deleteBtn);
 
-        card.getChildren().addAll(nameLabel, pathLabel, techLabel, buttonsBox);
+        card.getChildren().addAll(nameLabel, pathLabel, techLabel, statusLabel, buttonsBox);
         return card;
-    }
-
-    private String getTechEmoji(String techType) {
-        switch (techType.toLowerCase()) {
-            case "java": return "☕";
-            case "node": return "🟢";
-            case "python": return "🐍";
-            case "dotnet": return "🔷";
-            case "maven": return "📦";
-            default: return "⚙";
-        }
     }
 
     private void showAddProfileDialog() {
         Stage dialog = new Stage();
-        dialog.setTitle("Novo Perfil de Projeto");
+        dialog.setTitle("Criar .java-version");
         
         VBox layout = new VBox(15);
         layout.setPadding(new Insets(20));
         layout.setStyle("-fx-background-color: white;");
 
-        Label titleLabel = new Label("Criar Perfil de Projeto");
+        Label titleLabel = new Label("Configurar Projeto Java");
         titleLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 18));
+        
+        Label descLabel = new Label("Crie um arquivo .java-version no seu projeto para ativação automática da versão.");
+        descLabel.setFont(Font.font("Segoe UI", 12));
+        descLabel.setWrapText(true);
 
         TextField nameField = new TextField();
-        nameField.setPromptText("Nome do projeto (ex: MeuApp)");
+        nameField.setPromptText("Nome do projeto (opcional)");
         nameField.setPrefWidth(400);
 
         HBox pathBox = new HBox(10);
@@ -367,91 +519,86 @@ public class VersionManagerApp extends Application {
         });
         pathBox.getChildren().addAll(pathField, browseBtn);
 
-        ComboBox<String> techCombo = new ComboBox<>();
-        techCombo.getItems().addAll("Java", "Node.js", "Python", ".NET", "Maven");
-        techCombo.setPromptText("Selecione a tecnologia");
-        techCombo.setPrefWidth(400);
-
         ComboBox<String> versionCombo = new ComboBox<>();
-        versionCombo.setPromptText("Selecione a versão");
+        versionCombo.setPromptText("Selecione a versão do Java");
         versionCombo.setPrefWidth(400);
-        versionCombo.setDisable(true);
-
-        techCombo.setOnAction(e -> {
-            String tech = techCombo.getValue();
-            versionCombo.getItems().clear();
-            versionCombo.setDisable(false);
-            
-            switch (tech) {
-                case "Java":
-                    detectJavaVersions();
-                    for (JavaVersion v : javaVersions) {
-                        versionCombo.getItems().add(v.name + " (" + v.version + ")");
-                    }
-                    break;
-                case "Node.js":
-                    detectNodeVersions();
-                    for (NodeVersion v : nodeVersions) {
-                        versionCombo.getItems().add(v.name + " (" + v.version + ")");
-                    }
-                    break;
-                case "Python":
-                    detectPythonVersions();
-                    for (PythonVersion v : pythonVersions) {
-                        versionCombo.getItems().add(v.name + " (" + v.version + ")");
-                    }
-                    break;
-                case ".NET":
-                    detectDotNetVersions();
-                    for (DotNetVersion v : dotnetVersions) {
-                        versionCombo.getItems().add(v.name + " (" + v.version + ")");
-                    }
-                    break;
-                case "Maven":
-                    detectMavenVersions();
-                    for (MavenVersion v : mavenVersions) {
-                        versionCombo.getItems().add(v.name + " (" + v.version + ")");
-                    }
-                    break;
-            }
-        });
+        
+        detectJavaVersions();
+        for (JavaVersion v : javaVersions) {
+            versionCombo.getItems().add(v.version + " - " + v.name);
+        }
 
         HBox buttonBox = new HBox(10);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
-        Button saveBtn = new Button("💾 Salvar");
+        Button saveBtn = new Button("💾 Criar");
         saveBtn.setStyle("-fx-background-color: #11998e; -fx-text-fill: white; -fx-padding: 8 20; -fx-background-radius: 15;");
         saveBtn.setOnAction(e -> {
             String name = nameField.getText().trim();
             String path = pathField.getText().trim();
-            String tech = techCombo.getValue();
             String version = versionCombo.getValue();
             
-            if (name.isEmpty() || path.isEmpty() || tech == null || version == null) {
-                Alert alert = new Alert(Alert.AlertType.WARNING, "Preencha todos os campos!");
+            if (path.isEmpty() || version == null) {
+                Alert alert = new Alert(Alert.AlertType.WARNING, "Preencha a pasta e selecione a versão!");
                 alert.showAndWait();
                 return;
             }
+            
+            if (name.isEmpty()) {
+                name = new File(path).getName();
+            }
 
-            String techType = tech.replace(".NET", "dotnet").replace("Node.js", "node").toLowerCase();
-            String versionPath = getVersionPath(techType, version);
-            
-            ProjectProfile profile = new ProjectProfile(name, path, techType, version, versionPath);
-            projectProfiles.add(profile);
-            saveProfiles();
-            
-            dialog.close();
-            showProjectProfiles();
+            try {
+                // Extrair número da versão
+                String versionNumber = version.split(" ")[0];
+                String versionPath = getVersionPathByNumber(versionNumber);
+                
+                // Criar arquivo .java-version
+                File versionFile = new File(path, ".java-version");
+                Files.write(versionFile.toPath(), versionNumber.getBytes());
+                
+                // Salvar no registro
+                ProjectProfile profile = new ProjectProfile(name, path, "java", version, versionPath);
+                projectProfiles.add(profile);
+                saveProfiles();
+                
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Configurado!");
+                alert.setHeaderText("Arquivo .java-version criado!");
+                alert.setContentText(
+                    "Projeto: " + name + "\n" +
+                    "Pasta: " + path + "\n" +
+                    "Versão: " + versionNumber + "\n\n" +
+                    "Agora ao rodar 'java' nessa pasta, a versão " + versionNumber + " será usada automaticamente!"
+                );
+                alert.showAndWait();
+                
+                dialog.close();
+                showProjectProfiles();
+                
+            } catch (Exception ex) {
+                Alert alert = new Alert(Alert.AlertType.ERROR, "Erro ao criar arquivo: " + ex.getMessage());
+                alert.showAndWait();
+            }
         });
 
         Button cancelBtn = new Button("Cancelar");
         cancelBtn.setOnAction(e -> dialog.close());
         buttonBox.getChildren().addAll(cancelBtn, saveBtn);
 
-        layout.getChildren().addAll(titleLabel, nameField, pathBox, techCombo, versionCombo, buttonBox);
+        layout.getChildren().addAll(titleLabel, descLabel, nameField, pathBox, versionCombo, buttonBox);
         
         Scene scene = new Scene(layout);
         dialog.setScene(scene);
         dialog.show();
+    }
+    
+    private String getVersionPathByNumber(String versionNumber) {
+        for (JavaVersion v : javaVersions) {
+            if (v.version.startsWith(versionNumber)) {
+                return v.path;
+            }
+        }
+        return "";
     }
 
     private String getVersionPath(String techType, String versionName) {
@@ -483,112 +630,6 @@ public class VersionManagerApp extends Application {
                 break;
         }
         return "";
-    }
-
-    private void generateActivationScripts(ProjectProfile profile) {
-        try {
-            File projectDir = new File(profile.projectPath);
-            
-            // Script PowerShell
-            String ps1Content = generatePowerShellScript(profile);
-            File ps1File = new File(projectDir, "activate-" + profile.techType + ".ps1");
-            Files.write(ps1File.toPath(), ps1Content.getBytes());
-            
-            // Script Batch
-            String batContent = generateBatchScript(profile);
-            File batFile = new File(projectDir, "activate-" + profile.techType + ".bat");
-            Files.write(batFile.toPath(), batContent.getBytes());
-            
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("Scripts Gerados!");
-            alert.setHeaderText("Scripts criados com sucesso:");
-            alert.setContentText("📜 " + ps1File.getName() + "\n📜 " + batFile.getName() + "\n\nLocalização: " + projectDir.getAbsolutePath());
-            alert.showAndWait();
-            
-        } catch (Exception e) {
-            Alert alert = new Alert(Alert.AlertType.ERROR, "Erro ao gerar scripts: " + e.getMessage());
-            alert.showAndWait();
-        }
-    }
-
-    private String generatePowerShellScript(ProjectProfile profile) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("# Script de Ativação - ").append(profile.projectName).append("\n");
-        sb.append("# Gerado por StackFlipick\n\n");
-        
-        switch (profile.techType) {
-            case "java":
-                sb.append("$env:JAVA_HOME = \"").append(profile.versionPath).append("\"\n");
-                sb.append("$env:PATH = \"$env:JAVA_HOME\\bin;$env:PATH\"\n");
-                sb.append("Write-Host \"✅ Java configurado: $env:JAVA_HOME\" -ForegroundColor Green\n");
-                break;
-            case "node":
-                sb.append("$env:PATH = \"").append(profile.versionPath).append(";$env:PATH\"\n");
-                sb.append("Write-Host \"✅ Node.js configurado\" -ForegroundColor Green\n");
-                break;
-            case "python":
-                sb.append("$env:PYTHON_HOME = \"").append(profile.versionPath).append("\"\n");
-                sb.append("$env:PATH = \"$env:PYTHON_HOME;$env:PYTHON_HOME\\Scripts;$env:PATH\"\n");
-                sb.append("Write-Host \"✅ Python configurado: $env:PYTHON_HOME\" -ForegroundColor Green\n");
-                break;
-            case "dotnet":
-                sb.append("$env:DOTNET_ROOT = \"").append(profile.versionPath).append("\"\n");
-                sb.append("$env:PATH = \"$env:DOTNET_ROOT;$env:PATH\"\n");
-                sb.append("Write-Host \"✅ .NET configurado: $env:DOTNET_ROOT\" -ForegroundColor Green\n");
-                break;
-            case "maven":
-                sb.append("$env:MAVEN_HOME = \"").append(profile.versionPath).append("\"\n");
-                sb.append("$env:M2_HOME = \"").append(profile.versionPath).append("\"\n");
-                sb.append("$env:PATH = \"$env:MAVEN_HOME\\bin;$env:PATH\"\n");
-                sb.append("Write-Host \"✅ Maven configurado: $env:MAVEN_HOME\" -ForegroundColor Green\n");
-                break;
-        }
-        
-        sb.append("\ncd \"").append(profile.projectPath).append("\"\n");
-        sb.append("Write-Host \"📁 Diretório: ").append(profile.projectPath).append("\" -ForegroundColor Cyan\n");
-        
-        return sb.toString();
-    }
-
-    private String generateBatchScript(ProjectProfile profile) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("@echo off\n");
-        sb.append("REM Script de Ativação - ").append(profile.projectName).append("\n");
-        sb.append("REM Gerado por StackFlipick\n\n");
-        
-        switch (profile.techType) {
-            case "java":
-                sb.append("set JAVA_HOME=").append(profile.versionPath).append("\n");
-                sb.append("set PATH=%JAVA_HOME%\\bin;%PATH%\n");
-                sb.append("echo ✅ Java configurado: %JAVA_HOME%\n");
-                break;
-            case "node":
-                sb.append("set PATH=").append(profile.versionPath).append(";%PATH%\n");
-                sb.append("echo ✅ Node.js configurado\n");
-                break;
-            case "python":
-                sb.append("set PYTHON_HOME=").append(profile.versionPath).append("\n");
-                sb.append("set PATH=%PYTHON_HOME%;%PYTHON_HOME%\\Scripts;%PATH%\n");
-                sb.append("echo ✅ Python configurado: %PYTHON_HOME%\n");
-                break;
-            case "dotnet":
-                sb.append("set DOTNET_ROOT=").append(profile.versionPath).append("\n");
-                sb.append("set PATH=%DOTNET_ROOT%;%PATH%\n");
-                sb.append("echo ✅ .NET configurado: %DOTNET_ROOT%\n");
-                break;
-            case "maven":
-                sb.append("set MAVEN_HOME=").append(profile.versionPath).append("\n");
-                sb.append("set M2_HOME=").append(profile.versionPath).append("\n");
-                sb.append("set PATH=%MAVEN_HOME%\\bin;%PATH%\n");
-                sb.append("echo ✅ Maven configurado: %MAVEN_HOME%\n");
-                break;
-        }
-        
-        sb.append("\ncd /d \"").append(profile.projectPath).append("\"\n");
-        sb.append("echo 📁 Diretório: ").append(profile.projectPath).append("\n");
-        sb.append("cmd /k\n");
-        
-        return sb.toString();
     }
 
     private File getProfilesFile() {
