@@ -199,6 +199,9 @@ public class VersionManagerApp extends Application {
     }
 
     private void showProjectProfiles() {
+        // Verificar e instalar shims automaticamente
+        autoInstallShimsIfNeeded();
+        
         loadProfiles();
         
         StackPane root = new StackPane();
@@ -239,15 +242,18 @@ public class VersionManagerApp extends Application {
         infoBox.setPadding(new Insets(15));
         infoBox.setStyle("-fx-background-color: #e3f2fd; -fx-background-radius: 10; -fx-border-color: #2196f3; -fx-border-width: 2; -fx-border-radius: 10;");
         
-        Label infoTitle = new Label("💡 Como Funciona");
+        Label infoTitle = new Label("💡 Configuração Automática Ativa!");
         infoTitle.setFont(Font.font("Segoe UI", FontWeight.BOLD, 14));
         infoTitle.setTextFill(Color.web("#1976d2"));
         
+        String userHome = System.getProperty("user.home");
+        File shimsDir = new File(userHome, ".stackflipick\\shims");
+        
         Label infoText = new Label(
-            "1. Configure os shims/wrappers do StackFlipick\n" +
-            "2. Crie arquivo .java-version em seus projetos\n" +
-            "3. O Java será selecionado automaticamente por pasta!\n\n" +
-            "Exemplo: echo 17 > .java-version"
+            "✅ Shims instalados em: " + shimsDir.getAbsolutePath() + "\n\n" +
+            "📁 Crie arquivos .java-version em suas pastas de projeto\n" +
+            "🚀 O Java correto será usado automaticamente!\n\n" +
+            "Reinicie o terminal após criar o primeiro projeto."
         );
         infoText.setFont(Font.font("Segoe UI", 12));
         infoText.setTextFill(Color.web("#424242"));
@@ -255,32 +261,25 @@ public class VersionManagerApp extends Application {
         
         infoBox.getChildren().addAll(infoTitle, infoText);
 
-        // Botões de configuração
+        // Botão para criar projeto
         HBox buttonsRow = new HBox(10);
         buttonsRow.setAlignment(Pos.CENTER);
         
-        Button installShimsBtn = new Button("🔧 Instalar Shims");
-        installShimsBtn.setFont(Font.font("Segoe UI", FontWeight.BOLD, 14));
-        installShimsBtn.setTextFill(Color.WHITE);
-        installShimsBtn.setPadding(new Insets(10, 25, 10, 25));
-        installShimsBtn.setStyle("-fx-background-color: linear-gradient(to right, #11998e, #38ef7d); -fx-background-radius: 20; -fx-cursor: hand;");
-        installShimsBtn.setOnAction(e -> installJavaShims());
-        
-        Button addProfileBtn = new Button("➕ Criar .java-version");
+        Button addProfileBtn = new Button("➕ Criar .java-version em Projeto");
         addProfileBtn.setFont(Font.font("Segoe UI", FontWeight.BOLD, 14));
         addProfileBtn.setTextFill(Color.WHITE);
         addProfileBtn.setPadding(new Insets(10, 25, 10, 25));
-        addProfileBtn.setStyle("-fx-background-color: #667eea; -fx-background-radius: 20; -fx-cursor: hand;");
+        addProfileBtn.setStyle("-fx-background-color: linear-gradient(to right, #667eea, #764ba2); -fx-background-radius: 20; -fx-cursor: hand;");
         addProfileBtn.setOnAction(e -> showAddProfileDialog());
         
-        buttonsRow.getChildren().addAll(installShimsBtn, addProfileBtn);
+        buttonsRow.getChildren().add(addProfileBtn);
 
         // Container de perfis
         VBox profilesContainer = new VBox(15);
         profilesContainer.setPadding(new Insets(10));
         
         if (projectProfiles.isEmpty()) {
-            Label emptyLabel = new Label("Nenhum projeto configurado ainda.\nInstale os shims e crie seu primeiro .java-version!");
+            Label emptyLabel = new Label("Nenhum projeto configurado ainda.\nClique em 'Criar .java-version' para começar!");
             emptyLabel.setFont(Font.font("Segoe UI", 14));
             emptyLabel.setTextFill(Color.web("#999999"));
             emptyLabel.setWrapText(true);
@@ -300,10 +299,18 @@ public class VersionManagerApp extends Application {
         primaryStage.setScene(scene);
     }
     
-    private void installJavaShims() {
+    private void autoInstallShimsIfNeeded() {
+        String userHome = System.getProperty("user.home");
+        File shimsDir = new File(userHome, ".stackflipick\\shims");
+        File javaShim = new File(shimsDir, "java.bat");
+        
+        // Se os shims já existem, não precisa instalar
+        if (javaShim.exists()) {
+            return;
+        }
+        
         try {
-            String userHome = System.getProperty("user.home");
-            File shimsDir = new File(userHome, ".stackflipick\\shims");
+            // Criar diretório se não existir
             shimsDir.mkdirs();
             
             // Criar java.bat
@@ -322,21 +329,36 @@ public class VersionManagerApp extends Application {
             String ps1 = generateJavaShimPowerShell();
             Files.write(new File(shimsDir, "java-wrapper.ps1").toPath(), ps1.getBytes());
             
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle("Shims Instalados!");
-            alert.setHeaderText("Configuração automática ativada!");
-            alert.setContentText(
-                "Shims criados em: " + shimsDir.getAbsolutePath() + "\n\n" +
-                "IMPORTANTE: Adicione ao PATH:\n" +
-                shimsDir.getAbsolutePath() + "\n\n" +
-                "Abra as configurações do sistema e adicione esse caminho\n" +
-                "no início da variável PATH do usuário."
-            );
-            alert.showAndWait();
+            // Configurar PATH automaticamente
+            configurePathAutomatically(shimsDir.getAbsolutePath());
             
         } catch (Exception e) {
-            Alert alert = new Alert(Alert.AlertType.ERROR, "Erro ao instalar shims: " + e.getMessage());
-            alert.showAndWait();
+            System.err.println("Erro ao instalar shims: " + e.getMessage());
+        }
+    }
+    
+    private void configurePathAutomatically(String shimsPath) {
+        try {
+            // Adicionar ao PATH do usuário usando PowerShell
+            String psCommand = String.format(
+                "$currentPath = [Environment]::GetEnvironmentVariable('Path', 'User'); " +
+                "if ($currentPath -notlike '*%s*') { " +
+                "    [Environment]::SetEnvironmentVariable('Path', '%s;' + $currentPath, 'User'); " +
+                "    Write-Host 'PATH configurado com sucesso!' " +
+                "} else { " +
+                "    Write-Host 'PATH já configurado.' " +
+                "}",
+                shimsPath.replace("\\", "\\\\"),
+                shimsPath.replace("\\", "\\\\")
+            );
+            
+            ProcessBuilder pb = new ProcessBuilder("powershell", "-Command", psCommand);
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            process.waitFor();
+            
+        } catch (Exception e) {
+            System.err.println("Erro ao configurar PATH: " + e.getMessage());
         }
     }
     
