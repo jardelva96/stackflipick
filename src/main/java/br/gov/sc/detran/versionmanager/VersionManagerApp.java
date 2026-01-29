@@ -10,9 +10,15 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
-import java.io.File;
+import javafx.stage.DirectoryChooser;
+import java.io.*;
+import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 
 public class VersionManagerApp extends Application {
     
@@ -21,6 +27,7 @@ public class VersionManagerApp extends Application {
     private List<DotNetVersion> dotnetVersions = new ArrayList<>();
     private List<PythonVersion> pythonVersions = new ArrayList<>();
     private List<MavenVersion> mavenVersions = new ArrayList<>();
+    private List<ProjectProfile> projectProfiles = new ArrayList<>();
     private JavaVersion selectedJava = null;
     private NodeVersion selectedNode = null;
     private DotNetVersion selectedDotNet = null;
@@ -101,9 +108,10 @@ public class VersionManagerApp extends Application {
         grid.add(createTechCard("nodejs-icon.png", "Node.js", "#68a063", this::showNodeManager), 1, 0);
         grid.add(createTechCard("dotnet-icon.png", ".NET", "#512bd4", this::showDotNetManager), 2, 0);
         
-        // Linha 2: Python, Maven
+        // Linha 2: Python, Maven, Perfis
         grid.add(createTechCard("python-icon.png", "Python", "#3776ab", this::showPythonManager), 0, 1);
         grid.add(createTechCard("maven-icon.png", "Maven", "#c71a36", this::showMavenManager), 1, 1);
+        grid.add(createTechCard("app-logo.png", "Perfis", "#667eea", this::showProjectProfiles), 2, 1);
 
         mainCard.getChildren().addAll(title, subtitle, grid);
         
@@ -188,6 +196,434 @@ public class VersionManagerApp extends Application {
         showTechManager("📦 Apache Maven", "MAVEN", 
             () -> { detectMavenVersions(); renderMavenVersions(); },
             mavenContainer, currentMavenLabel);
+    }
+
+    private void showProjectProfiles() {
+        loadProfiles();
+        
+        StackPane root = new StackPane();
+        root.setStyle("-fx-background-color: linear-gradient(to bottom right, #667eea, #764ba2);");
+
+        ScrollPane scrollPane = new ScrollPane();
+        scrollPane.setFitToWidth(true);
+        scrollPane.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
+        scrollPane.setPadding(new Insets(15));
+
+        VBox mainCard = new VBox(20);
+        mainCard.setPadding(new Insets(30));
+        mainCard.setStyle("-fx-background-color: white; -fx-background-radius: 20; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 20, 0, 0, 10);");
+        mainCard.setMaxWidth(800);
+        mainCard.setAlignment(Pos.TOP_CENTER);
+
+        // Header
+        HBox header = new HBox(15);
+        header.setAlignment(Pos.CENTER_LEFT);
+        
+        Button backButton = new Button("◀ Voltar");
+        backButton.setFont(Font.font("Segoe UI", FontWeight.BOLD, 12));
+        backButton.setTextFill(Color.WHITE);
+        backButton.setPadding(new Insets(8, 18, 8, 18));
+        backButton.setStyle("-fx-background-color: #667eea; -fx-background-radius: 20; -fx-cursor: hand;");
+        backButton.setOnMouseEntered(e -> backButton.setStyle("-fx-background-color: derive(#667eea, -15%); -fx-background-radius: 20; -fx-cursor: hand;"));
+        backButton.setOnMouseExited(e -> backButton.setStyle("-fx-background-color: #667eea; -fx-background-radius: 20; -fx-cursor: hand;"));
+        backButton.setOnAction(e -> showMainMenu());
+
+        Label titleLabel = new Label("📁 Perfis de Projeto");
+        titleLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 24));
+        titleLabel.setTextFill(Color.web("#667eea"));
+
+        header.getChildren().addAll(backButton, titleLabel);
+
+        // Botão adicionar novo perfil
+        Button addButton = new Button("➕ Novo Perfil");
+        addButton.setFont(Font.font("Segoe UI", FontWeight.BOLD, 14));
+        addButton.setTextFill(Color.WHITE);
+        addButton.setPadding(new Insets(10, 25, 10, 25));
+        addButton.setStyle("-fx-background-color: linear-gradient(to right, #11998e, #38ef7d); -fx-background-radius: 20; -fx-cursor: hand;");
+        addButton.setOnMouseEntered(e -> addButton.setStyle("-fx-background-color: linear-gradient(to right, #0d8070, #2fd069); -fx-background-radius: 20; -fx-cursor: hand;"));
+        addButton.setOnMouseExited(e -> addButton.setStyle("-fx-background-color: linear-gradient(to right, #11998e, #38ef7d); -fx-background-radius: 20; -fx-cursor: hand;"));
+        addButton.setOnAction(e -> showAddProfileDialog());
+
+        // Container de perfis
+        VBox profilesContainer = new VBox(15);
+        profilesContainer.setPadding(new Insets(10));
+        
+        if (projectProfiles.isEmpty()) {
+            Label emptyLabel = new Label("Nenhum perfil configurado.\nClique em 'Novo Perfil' para começar!");
+            emptyLabel.setFont(Font.font("Segoe UI", 14));
+            emptyLabel.setTextFill(Color.web("#999999"));
+            emptyLabel.setWrapText(true);
+            emptyLabel.setAlignment(Pos.CENTER);
+            profilesContainer.getChildren().add(emptyLabel);
+        } else {
+            for (ProjectProfile profile : projectProfiles) {
+                profilesContainer.getChildren().add(createProfileCard(profile, profilesContainer));
+            }
+        }
+
+        mainCard.getChildren().addAll(header, addButton, profilesContainer);
+        scrollPane.setContent(mainCard);
+        root.getChildren().add(scrollPane);
+        
+        Scene scene = new Scene(root, 850, 680);
+        primaryStage.setScene(scene);
+    }
+
+    private VBox createProfileCard(ProjectProfile profile, VBox parentContainer) {
+        VBox card = new VBox(12);
+        card.setPadding(new Insets(20));
+        card.setStyle("-fx-background-color: #f8f9fa; -fx-background-radius: 12; -fx-border-color: #667eea; -fx-border-width: 2; -fx-border-radius: 12;");
+
+        // Nome do projeto
+        Label nameLabel = new Label("📁 " + profile.projectName);
+        nameLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 16));
+        nameLabel.setTextFill(Color.web("#667eea"));
+
+        // Caminho
+        Label pathLabel = new Label("📂 " + profile.projectPath);
+        pathLabel.setFont(Font.font("Segoe UI", 12));
+        pathLabel.setTextFill(Color.web("#666666"));
+        pathLabel.setWrapText(true);
+
+        // Tecnologia e versão
+        Label techLabel = new Label(getTechEmoji(profile.techType) + " " + profile.techType.toUpperCase() + " → " + profile.versionName);
+        techLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 13));
+        techLabel.setTextFill(Color.web("#11998e"));
+
+        // Botões
+        HBox buttonsBox = new HBox(10);
+        buttonsBox.setAlignment(Pos.CENTER_LEFT);
+
+        Button generateScriptBtn = new Button("📜 Gerar Scripts");
+        generateScriptBtn.setFont(Font.font("Segoe UI", 11));
+        generateScriptBtn.setPadding(new Insets(6, 15, 6, 15));
+        generateScriptBtn.setStyle("-fx-background-color: #667eea; -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;");
+        generateScriptBtn.setOnMouseEntered(e -> generateScriptBtn.setStyle("-fx-background-color: derive(#667eea, -15%); -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;"));
+        generateScriptBtn.setOnMouseExited(e -> generateScriptBtn.setStyle("-fx-background-color: #667eea; -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;"));
+        generateScriptBtn.setOnAction(e -> generateActivationScripts(profile));
+
+        Button deleteBtn = new Button("🗑 Remover");
+        deleteBtn.setFont(Font.font("Segoe UI", 11));
+        deleteBtn.setPadding(new Insets(6, 15, 6, 15));
+        deleteBtn.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;");
+        deleteBtn.setOnMouseEntered(e -> deleteBtn.setStyle("-fx-background-color: derive(#dc3545, -15%); -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;"));
+        deleteBtn.setOnMouseExited(e -> deleteBtn.setStyle("-fx-background-color: #dc3545; -fx-text-fill: white; -fx-background-radius: 15; -fx-cursor: hand;"));
+        deleteBtn.setOnAction(e -> {
+            projectProfiles.remove(profile);
+            saveProfiles();
+            parentContainer.getChildren().remove(card);
+            if (projectProfiles.isEmpty()) {
+                showProjectProfiles(); // Recarregar para mostrar mensagem vazia
+            }
+        });
+
+        buttonsBox.getChildren().addAll(generateScriptBtn, deleteBtn);
+
+        card.getChildren().addAll(nameLabel, pathLabel, techLabel, buttonsBox);
+        return card;
+    }
+
+    private String getTechEmoji(String techType) {
+        switch (techType.toLowerCase()) {
+            case "java": return "☕";
+            case "node": return "🟢";
+            case "python": return "🐍";
+            case "dotnet": return "🔷";
+            case "maven": return "📦";
+            default: return "⚙";
+        }
+    }
+
+    private void showAddProfileDialog() {
+        Stage dialog = new Stage();
+        dialog.setTitle("Novo Perfil de Projeto");
+        
+        VBox layout = new VBox(15);
+        layout.setPadding(new Insets(20));
+        layout.setStyle("-fx-background-color: white;");
+
+        Label titleLabel = new Label("Criar Perfil de Projeto");
+        titleLabel.setFont(Font.font("Segoe UI", FontWeight.BOLD, 18));
+
+        TextField nameField = new TextField();
+        nameField.setPromptText("Nome do projeto (ex: MeuApp)");
+        nameField.setPrefWidth(400);
+
+        HBox pathBox = new HBox(10);
+        TextField pathField = new TextField();
+        pathField.setPromptText("Caminho da pasta do projeto");
+        pathField.setPrefWidth(300);
+        Button browseBtn = new Button("📁 Procurar");
+        browseBtn.setOnAction(e -> {
+            DirectoryChooser chooser = new DirectoryChooser();
+            chooser.setTitle("Selecionar Pasta do Projeto");
+            File dir = chooser.showDialog(dialog);
+            if (dir != null) {
+                pathField.setText(dir.getAbsolutePath());
+                if (nameField.getText().isEmpty()) {
+                    nameField.setText(dir.getName());
+                }
+            }
+        });
+        pathBox.getChildren().addAll(pathField, browseBtn);
+
+        ComboBox<String> techCombo = new ComboBox<>();
+        techCombo.getItems().addAll("Java", "Node.js", "Python", ".NET", "Maven");
+        techCombo.setPromptText("Selecione a tecnologia");
+        techCombo.setPrefWidth(400);
+
+        ComboBox<String> versionCombo = new ComboBox<>();
+        versionCombo.setPromptText("Selecione a versão");
+        versionCombo.setPrefWidth(400);
+        versionCombo.setDisable(true);
+
+        techCombo.setOnAction(e -> {
+            String tech = techCombo.getValue();
+            versionCombo.getItems().clear();
+            versionCombo.setDisable(false);
+            
+            switch (tech) {
+                case "Java":
+                    detectJavaVersions();
+                    for (JavaVersion v : javaVersions) {
+                        versionCombo.getItems().add(v.name + " (" + v.version + ")");
+                    }
+                    break;
+                case "Node.js":
+                    detectNodeVersions();
+                    for (NodeVersion v : nodeVersions) {
+                        versionCombo.getItems().add(v.name + " (" + v.version + ")");
+                    }
+                    break;
+                case "Python":
+                    detectPythonVersions();
+                    for (PythonVersion v : pythonVersions) {
+                        versionCombo.getItems().add(v.name + " (" + v.version + ")");
+                    }
+                    break;
+                case ".NET":
+                    detectDotNetVersions();
+                    for (DotNetVersion v : dotnetVersions) {
+                        versionCombo.getItems().add(v.name + " (" + v.version + ")");
+                    }
+                    break;
+                case "Maven":
+                    detectMavenVersions();
+                    for (MavenVersion v : mavenVersions) {
+                        versionCombo.getItems().add(v.name + " (" + v.version + ")");
+                    }
+                    break;
+            }
+        });
+
+        HBox buttonBox = new HBox(10);
+        buttonBox.setAlignment(Pos.CENTER_RIGHT);
+        Button saveBtn = new Button("💾 Salvar");
+        saveBtn.setStyle("-fx-background-color: #11998e; -fx-text-fill: white; -fx-padding: 8 20; -fx-background-radius: 15;");
+        saveBtn.setOnAction(e -> {
+            String name = nameField.getText().trim();
+            String path = pathField.getText().trim();
+            String tech = techCombo.getValue();
+            String version = versionCombo.getValue();
+            
+            if (name.isEmpty() || path.isEmpty() || tech == null || version == null) {
+                Alert alert = new Alert(Alert.AlertType.WARNING, "Preencha todos os campos!");
+                alert.showAndWait();
+                return;
+            }
+
+            String techType = tech.replace(".NET", "dotnet").replace("Node.js", "node").toLowerCase();
+            String versionPath = getVersionPath(techType, version);
+            
+            ProjectProfile profile = new ProjectProfile(name, path, techType, version, versionPath);
+            projectProfiles.add(profile);
+            saveProfiles();
+            
+            dialog.close();
+            showProjectProfiles();
+        });
+
+        Button cancelBtn = new Button("Cancelar");
+        cancelBtn.setOnAction(e -> dialog.close());
+        buttonBox.getChildren().addAll(cancelBtn, saveBtn);
+
+        layout.getChildren().addAll(titleLabel, nameField, pathBox, techCombo, versionCombo, buttonBox);
+        
+        Scene scene = new Scene(layout);
+        dialog.setScene(scene);
+        dialog.show();
+    }
+
+    private String getVersionPath(String techType, String versionName) {
+        switch (techType) {
+            case "java":
+                for (JavaVersion v : javaVersions) {
+                    if ((v.name + " (" + v.version + ")").equals(versionName)) return v.path;
+                }
+                break;
+            case "node":
+                for (NodeVersion v : nodeVersions) {
+                    if ((v.name + " (" + v.version + ")").equals(versionName)) return v.path;
+                }
+                break;
+            case "python":
+                for (PythonVersion v : pythonVersions) {
+                    if ((v.name + " (" + v.version + ")").equals(versionName)) return v.path;
+                }
+                break;
+            case "dotnet":
+                for (DotNetVersion v : dotnetVersions) {
+                    if ((v.name + " (" + v.version + ")").equals(versionName)) return v.path;
+                }
+                break;
+            case "maven":
+                for (MavenVersion v : mavenVersions) {
+                    if ((v.name + " (" + v.version + ")").equals(versionName)) return v.path;
+                }
+                break;
+        }
+        return "";
+    }
+
+    private void generateActivationScripts(ProjectProfile profile) {
+        try {
+            File projectDir = new File(profile.projectPath);
+            
+            // Script PowerShell
+            String ps1Content = generatePowerShellScript(profile);
+            File ps1File = new File(projectDir, "activate-" + profile.techType + ".ps1");
+            Files.write(ps1File.toPath(), ps1Content.getBytes());
+            
+            // Script Batch
+            String batContent = generateBatchScript(profile);
+            File batFile = new File(projectDir, "activate-" + profile.techType + ".bat");
+            Files.write(batFile.toPath(), batContent.getBytes());
+            
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Scripts Gerados!");
+            alert.setHeaderText("Scripts criados com sucesso:");
+            alert.setContentText("📜 " + ps1File.getName() + "\n📜 " + batFile.getName() + "\n\nLocalização: " + projectDir.getAbsolutePath());
+            alert.showAndWait();
+            
+        } catch (Exception e) {
+            Alert alert = new Alert(Alert.AlertType.ERROR, "Erro ao gerar scripts: " + e.getMessage());
+            alert.showAndWait();
+        }
+    }
+
+    private String generatePowerShellScript(ProjectProfile profile) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# Script de Ativação - ").append(profile.projectName).append("\n");
+        sb.append("# Gerado por StackFlipick\n\n");
+        
+        switch (profile.techType) {
+            case "java":
+                sb.append("$env:JAVA_HOME = \"").append(profile.versionPath).append("\"\n");
+                sb.append("$env:PATH = \"$env:JAVA_HOME\\bin;$env:PATH\"\n");
+                sb.append("Write-Host \"✅ Java configurado: $env:JAVA_HOME\" -ForegroundColor Green\n");
+                break;
+            case "node":
+                sb.append("$env:PATH = \"").append(profile.versionPath).append(";$env:PATH\"\n");
+                sb.append("Write-Host \"✅ Node.js configurado\" -ForegroundColor Green\n");
+                break;
+            case "python":
+                sb.append("$env:PYTHON_HOME = \"").append(profile.versionPath).append("\"\n");
+                sb.append("$env:PATH = \"$env:PYTHON_HOME;$env:PYTHON_HOME\\Scripts;$env:PATH\"\n");
+                sb.append("Write-Host \"✅ Python configurado: $env:PYTHON_HOME\" -ForegroundColor Green\n");
+                break;
+            case "dotnet":
+                sb.append("$env:DOTNET_ROOT = \"").append(profile.versionPath).append("\"\n");
+                sb.append("$env:PATH = \"$env:DOTNET_ROOT;$env:PATH\"\n");
+                sb.append("Write-Host \"✅ .NET configurado: $env:DOTNET_ROOT\" -ForegroundColor Green\n");
+                break;
+            case "maven":
+                sb.append("$env:MAVEN_HOME = \"").append(profile.versionPath).append("\"\n");
+                sb.append("$env:M2_HOME = \"").append(profile.versionPath).append("\"\n");
+                sb.append("$env:PATH = \"$env:MAVEN_HOME\\bin;$env:PATH\"\n");
+                sb.append("Write-Host \"✅ Maven configurado: $env:MAVEN_HOME\" -ForegroundColor Green\n");
+                break;
+        }
+        
+        sb.append("\ncd \"").append(profile.projectPath).append("\"\n");
+        sb.append("Write-Host \"📁 Diretório: ").append(profile.projectPath).append("\" -ForegroundColor Cyan\n");
+        
+        return sb.toString();
+    }
+
+    private String generateBatchScript(ProjectProfile profile) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("@echo off\n");
+        sb.append("REM Script de Ativação - ").append(profile.projectName).append("\n");
+        sb.append("REM Gerado por StackFlipick\n\n");
+        
+        switch (profile.techType) {
+            case "java":
+                sb.append("set JAVA_HOME=").append(profile.versionPath).append("\n");
+                sb.append("set PATH=%JAVA_HOME%\\bin;%PATH%\n");
+                sb.append("echo ✅ Java configurado: %JAVA_HOME%\n");
+                break;
+            case "node":
+                sb.append("set PATH=").append(profile.versionPath).append(";%PATH%\n");
+                sb.append("echo ✅ Node.js configurado\n");
+                break;
+            case "python":
+                sb.append("set PYTHON_HOME=").append(profile.versionPath).append("\n");
+                sb.append("set PATH=%PYTHON_HOME%;%PYTHON_HOME%\\Scripts;%PATH%\n");
+                sb.append("echo ✅ Python configurado: %PYTHON_HOME%\n");
+                break;
+            case "dotnet":
+                sb.append("set DOTNET_ROOT=").append(profile.versionPath).append("\n");
+                sb.append("set PATH=%DOTNET_ROOT%;%PATH%\n");
+                sb.append("echo ✅ .NET configurado: %DOTNET_ROOT%\n");
+                break;
+            case "maven":
+                sb.append("set MAVEN_HOME=").append(profile.versionPath).append("\n");
+                sb.append("set M2_HOME=").append(profile.versionPath).append("\n");
+                sb.append("set PATH=%MAVEN_HOME%\\bin;%PATH%\n");
+                sb.append("echo ✅ Maven configurado: %MAVEN_HOME%\n");
+                break;
+        }
+        
+        sb.append("\ncd /d \"").append(profile.projectPath).append("\"\n");
+        sb.append("echo 📁 Diretório: ").append(profile.projectPath).append("\n");
+        sb.append("cmd /k\n");
+        
+        return sb.toString();
+    }
+
+    private File getProfilesFile() {
+        String userHome = System.getProperty("user.home");
+        File configDir = new File(userHome, ".stackflipick");
+        if (!configDir.exists()) {
+            configDir.mkdirs();
+        }
+        return new File(configDir, "profiles.json");
+    }
+
+    private void loadProfiles() {
+        try {
+            File file = getProfilesFile();
+            if (file.exists()) {
+                ObjectMapper mapper = new ObjectMapper();
+                ProfilesData data = mapper.readValue(file, ProfilesData.class);
+                projectProfiles = data.profiles;
+            }
+        } catch (Exception e) {
+            System.err.println("Erro ao carregar perfis: " + e.getMessage());
+        }
+    }
+
+    private void saveProfiles() {
+        try {
+            File file = getProfilesFile();
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.enable(SerializationFeature.INDENT_OUTPUT);
+            ProfilesData data = new ProfilesData();
+            data.profiles = projectProfiles;
+            mapper.writeValue(file, data);
+        } catch (Exception e) {
+            System.err.println("Erro ao salvar perfis: " + e.getMessage());
+        }
     }
 
     private void showTechManager(String title, String techType, Runnable loadVersions, 
@@ -1216,6 +1652,28 @@ public class VersionManagerApp extends Application {
             this.version = version;
             this.isCurrent = isCurrent;
         }
+    }
+
+    static class ProjectProfile {
+        public String projectName;
+        public String projectPath;
+        public String techType; // "java", "node", "python", "dotnet", "maven"
+        public String versionName;
+        public String versionPath;
+
+        public ProjectProfile() {}
+
+        public ProjectProfile(String projectName, String projectPath, String techType, String versionName, String versionPath) {
+            this.projectName = projectName;
+            this.projectPath = projectPath;
+            this.techType = techType;
+            this.versionName = versionName;
+            this.versionPath = versionPath;
+        }
+    }
+
+    static class ProfilesData {
+        public List<ProjectProfile> profiles = new ArrayList<>();
     }
 
     public static void main(String[] args) {
