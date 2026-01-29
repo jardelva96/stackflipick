@@ -835,11 +835,14 @@ public class VersionManagerApp extends Application {
                     command.append(String.format(
                         "[System.Environment]::SetEnvironmentVariable('JAVA_HOME', '%s', 'User'); ",
                         selectedJava.path));
-                    command.append(String.format(
+                    
+                    // Adicionar %JAVA_HOME%\bin no início do PATH do usuário
+                    // e remover outras referências a Java
+                    command.append(
                         "$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User'); " +
-                        "$newPath = ('%s\\bin;' + ($userPath -replace '(?i)C:\\\\\\\\Program Files.*?Java.*?\\\\\\\\bin;', '')); " +
-                        "[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User'); ",
-                        selectedJava.path.replace("\\", "\\\\")));
+                        "$cleanPath = ($userPath -split ';' | Where-Object { $_ -notmatch '(?i)Eclipse Adoptium.*?bin|Java.*?bin' }) -join ';'; " +
+                        "$newPath = '%JAVA_HOME%\\bin;' + $cleanPath; " +
+                        "[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User'); ");
                 }
                 break;
             case "NODE":
