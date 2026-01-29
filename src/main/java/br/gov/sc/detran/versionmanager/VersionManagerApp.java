@@ -840,6 +840,14 @@ public class VersionManagerApp extends Application {
                         "$newPath = ('%s\\bin;' + ($userPath -replace '(?i)C:\\\\\\\\Program Files.*?Java.*?\\\\\\\\bin;', '')); " +
                         "[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User'); ",
                         selectedJava.path.replace("\\", "\\\\")));
+                    
+                    // Tentar limpar Java do PATH do Sistema (requer admin)
+                    command.append(
+                        "try { " +
+                        "$systemPath = [System.Environment]::GetEnvironmentVariable('Path', 'Machine'); " +
+                        "$cleanSystemPath = ($systemPath -split ';' | Where-Object { $_ -notmatch '(?i)Eclipse Adoptium.*?bin|Java.*?jre.*?bin|Java.*?jdk.*?bin' }) -join ';'; " +
+                        "[System.Environment]::SetEnvironmentVariable('Path', $cleanSystemPath, 'Machine'); " +
+                        "} catch { Write-Host 'Aviso: Não foi possível limpar PATH do Sistema (requer admin)' -ForegroundColor Yellow; }");
                 }
                 break;
             case "NODE":
