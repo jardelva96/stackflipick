@@ -46,6 +46,13 @@ public class VersionManagerApp extends Application {
     private Label currentMavenLabel;
     
     private Stage primaryStage;
+    
+    // Cache para versões detectadas (evita reescanear)
+    private boolean javaVersionsCached = false;
+    private boolean nodeVersionsCached = false;
+    private boolean dotnetVersionsCached = false;
+    private boolean pythonVersionsCached = false;
+    private boolean mavenVersionsCached = false;
 
     @Override
     public void start(Stage primaryStage) {
@@ -366,33 +373,67 @@ public class VersionManagerApp extends Application {
         return "@echo off\n" +
                "setlocal enabledelayedexpansion\n" +
                "\n" +
-               "REM Procura .java-version subindo na árvore de diretórios\n" +
+               "REM StackFlipick Java Shim - Intercepta java.exe\n" +
+               "REM Primeiro tenta .java-version local, depois config global\n" +
+               "\n" +
+               "set \"config_dir=%USERPROFILE%\\.stackflipick\"\n" +
+               "set \"global_config=%config_dir%\\global-java.txt\"\n" +
+               "set \"java_path=\"\n" +
+               "\n" +
+               "REM 1. Procura .java-version subindo na árvore\n" +
                "set \"current_dir=%CD%\"\n" +
                ":search\n" +
                "if exist \"%current_dir%\\.java-version\" (\n" +
                "    set /p version=<\"%current_dir%\\.java-version\"\n" +
-               "    goto found\n" +
+               "    call :find_java_by_version !version!\n" +
+               "    if defined java_path goto run_java\n" +
                ")\n" +
                "for %%I in (\"%current_dir%\\..\") do set \"parent=%%~fI\"\n" +
-               "if \"%current_dir%\"==\"%parent%\" goto notfound\n" +
+               "if \"%current_dir%\"==\"%parent%\" goto check_global\n" +
                "set \"current_dir=%parent%\"\n" +
                "goto search\n" +
                "\n" +
-               ":found\n" +
-               "REM Carrega config de versões\n" +
-               "set config_file=%USERPROFILE%\\.stackflipick\\profiles.json\n" +
-               "if exist \"%config_file%\" (\n" +
-               "    powershell -ExecutionPolicy Bypass -File \"%USERPROFILE%\\.stackflipick\\shims\\java-wrapper.ps1\" %*\n" +
-               "    exit /b !ERRORLEVEL!\n" +
+               ":check_global\n" +
+               "REM 2. Se não encontrou local, usa config global\n" +
+               "if exist \"%global_config%\" (\n" +
+               "    set /p java_path=<\"%global_config%\"\n" +
+               "    if exist \"!java_path!\\bin\\java.exe\" goto run_java\n" +
                ")\n" +
                "\n" +
-               ":notfound\n" +
-               "REM Se não encontrou, usa o Java padrão\n" +
+               "REM 3. Fallback para JAVA_HOME\n" +
                "if defined JAVA_HOME (\n" +
-               "    \"%JAVA_HOME%\\bin\\java.exe\" %*\n" +
-               ") else (\n" +
-               "    java.exe %*\n" +
-               ")\n";
+               "    set \"java_path=%JAVA_HOME%\"\n" +
+               "    goto run_java\n" +
+               ")\n" +
+               "\n" +
+               "REM 4. Último recurso - procura no sistema\n" +
+               "for %%I in (java.exe) do set \"java_path=%%~dp$PATH:I\"\n" +
+               "if defined java_path (\n" +
+               "    \"%java_path%java.exe\" %*\n" +
+               "    exit /b !ERRORLEVEL!\n" +
+               ")\n" +
+               "echo ERRO: Java nao encontrado. Configure usando StackFlipick.\n" +
+               "exit /b 1\n" +
+               "\n" +
+               ":run_java\n" +
+               "\"!java_path!\\bin\\java.exe\" %*\n" +
+               "exit /b !ERRORLEVEL!\n" +
+               "\n" +
+               ":find_java_by_version\n" +
+               "set \"ver=%~1\"\n" +
+               "REM Procura em caminhos conhecidos\n" +
+               "for %%D in (\n" +
+               "    \"C:\\Program Files\\Eclipse Adoptium\\jdk-%ver%*\"\n" +
+               "    \"C:\\Program Files\\Eclipse Adoptium\\jre-%ver%*\"\n" +
+               "    \"C:\\Program Files\\Java\\jdk-%ver%*\"\n" +
+               "    \"C:\\Program Files\\Java\\jre-%ver%*\"\n" +
+               ") do (\n" +
+               "    if exist %%D\\bin\\java.exe (\n" +
+               "        set \"java_path=%%~D\"\n" +
+               "        exit /b 0\n" +
+               "    )\n" +
+               ")\n" +
+               "exit /b 1\n";
     }
     
     private String generateJavacShimBatch() {
@@ -832,22 +873,28 @@ public class VersionManagerApp extends Application {
             case "JAVA":
                 if (selectedJava != null) {
                     hasSelection = true;
+                    
+                    // 1. Salvar no arquivo global para os shims usarem
+                    command.append(String.format(
+                        "$configDir = \"$env:USERPROFILE\\.stackflipick\"; " +
+                        "if (!(Test-Path $configDir)) { New-Item -ItemType Directory -Path $configDir -Force | Out-Null }; " +
+                        "Set-Content -Path \"$configDir\\global-java.txt\" -Value '%s' -NoNewline; ",
+                        selectedJava.path));
+                    
+                    // 2. Configurar JAVA_HOME no registro
                     command.append(String.format(
                         "[System.Environment]::SetEnvironmentVariable('JAVA_HOME', '%s', 'User'); ",
                         selectedJava.path));
-                    command.append(String.format(
-                        "$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User'); " +
-                        "$newPath = ('%s\\bin;' + ($userPath -replace '(?i)C:\\\\\\\\Program Files.*?Java.*?\\\\\\\\bin;', '')); " +
-                        "[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User'); ",
-                        selectedJava.path.replace("\\", "\\\\")));
                     
-                    // Tentar limpar Java do PATH do Sistema (requer admin)
+                    // 3. Garantir que shims estão no PATH do usuário (antes de tudo)
                     command.append(
-                        "try { " +
-                        "$systemPath = [System.Environment]::GetEnvironmentVariable('Path', 'Machine'); " +
-                        "$cleanSystemPath = ($systemPath -split ';' | Where-Object { $_ -notmatch '(?i)Eclipse Adoptium.*?bin|Java.*?jre.*?bin|Java.*?jdk.*?bin' }) -join ';'; " +
-                        "[System.Environment]::SetEnvironmentVariable('Path', $cleanSystemPath, 'Machine'); " +
-                        "} catch { Write-Host 'Aviso: Não foi possível limpar PATH do Sistema (requer admin)' -ForegroundColor Yellow; }");
+                        "$shimsPath = \"$env:USERPROFILE\\.stackflipick\\shims\"; " +
+                        "$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User'); " +
+                        "if ($userPath -notlike \"*$shimsPath*\") { " +
+                        "    $userPath = \"$shimsPath;$userPath\"; " +
+                        "}; " +
+                        "$cleanPath = ($userPath -split ';' | Where-Object { $_ -and $_ -notmatch '(?i)Eclipse Adoptium.*?bin|Java.*?bin' } | Select-Object -Unique) -join ';'; " +
+                        "[System.Environment]::SetEnvironmentVariable('Path', $cleanPath, 'User'); ");
                 }
                 break;
             case "NODE":
@@ -965,21 +1012,29 @@ public class VersionManagerApp extends Application {
     }
 
     private void detectJavaVersions() {
+        // Usar cache se já detectou
+        if (javaVersionsCached && !javaVersions.isEmpty()) {
+            updateCurrentJavaLabel();
+            return;
+        }
+        
         javaVersions.clear();
         selectedJava = null;
         
-        // Ler JAVA_HOME do registro USER (onde salvamos)
+        // Ler JAVA_HOME do arquivo global ou registro
         String currentJavaHome = null;
-        try {
-            Process process = Runtime.getRuntime().exec("powershell -Command \"[System.Environment]::GetEnvironmentVariable('JAVA_HOME', 'User')\"");
-            java.io.BufferedReader reader = new java.io.BufferedReader(
-                new java.io.InputStreamReader(process.getInputStream()));
-            currentJavaHome = reader.readLine();
-            if (currentJavaHome != null) {
-                currentJavaHome = currentJavaHome.trim();
+        String userHome = System.getProperty("user.home");
+        File globalConfig = new File(userHome, ".stackflipick\\global-java.txt");
+        
+        if (globalConfig.exists()) {
+            try {
+                currentJavaHome = new String(Files.readAllBytes(globalConfig.toPath())).trim();
+            } catch (Exception e) {
+                // Fallback
             }
-        } catch (Exception e) {
-            // Fallback para System.getenv
+        }
+        
+        if (currentJavaHome == null || currentJavaHome.isEmpty()) {
             currentJavaHome = System.getenv("JAVA_HOME");
         }
         
@@ -997,23 +1052,38 @@ public class VersionManagerApp extends Application {
                     for (File dir : dirs) {
                         File javaExe = new File(dir, "bin\\java.exe");
                         if (javaExe.exists()) {
-                            try {
-                                String version = getJavaVersion(javaExe.getAbsolutePath());
-                                boolean isCurrent = currentJavaHome != null && dir.getAbsolutePath().equalsIgnoreCase(currentJavaHome);
-                                javaVersions.add(new JavaVersion(dir.getName(), dir.getAbsolutePath(), version, isCurrent));
-                                if (isCurrent) {
-                                    selectedJava = javaVersions.get(javaVersions.size() - 1);
-                                }
-                            } catch (Exception e) {
-                                // Ignorar
+                            // Extrair versão do nome do diretório (RÁPIDO!)
+                            String version = extractVersionFromDirName(dir.getName());
+                            boolean isCurrent = currentJavaHome != null && dir.getAbsolutePath().equalsIgnoreCase(currentJavaHome);
+                            javaVersions.add(new JavaVersion(dir.getName(), dir.getAbsolutePath(), version, isCurrent));
+                            if (isCurrent) {
+                                selectedJava = javaVersions.get(javaVersions.size() - 1);
                             }
                         }
                     }
                 }
             }
         }
-
+        
+        javaVersionsCached = true;
         updateCurrentJavaLabel();
+    }
+    
+    private String extractVersionFromDirName(String dirName) {
+        // Extrai versão do nome do diretório sem executar java -version
+        // Exemplos: jdk-17.0.17.10-hotspot -> 17.0.17, jre-11.0.29.7 -> 11.0.29
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("(\\d+\\.\\d+\\.\\d+)");
+        java.util.regex.Matcher m = p.matcher(dirName);
+        if (m.find()) {
+            return m.group(1);
+        }
+        // Fallback: tentar extrair número principal
+        p = java.util.regex.Pattern.compile("(\\d+)");
+        m = p.matcher(dirName);
+        if (m.find()) {
+            return m.group(1);
+        }
+        return "Desconhecida";
     }
 
     private void detectNodeVersions() {
