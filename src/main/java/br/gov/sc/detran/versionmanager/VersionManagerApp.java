@@ -866,148 +866,180 @@ public class VersionManagerApp extends Application {
     }
 
     private void applySingleTechChanges(String techType) {
-        boolean hasSelection = false;
-        StringBuilder command = new StringBuilder("powershell -Command \"");
+        showStatus("⌛ Aplicando alterações...", "info");
 
+        new Thread(() -> {
+            List<String> psCommands = buildCommandsFor(techType);
+            if (psCommands.isEmpty()) {
+                javafx.application.Platform.runLater(() ->
+                    showStatus("⚠️ Selecione uma versão", "warning"));
+                return;
+            }
+
+            int exit = runPowerShell(psCommands);
+
+            if (exit == 0) {
+                javafx.application.Platform.runLater(() ->
+                    showStatus("✅ Alterações aplicadas! Reinicie o terminal/IDE.", "success"));
+            } else {
+                javafx.application.Platform.runLater(() ->
+                    showStatus("❌ Falha ao aplicar alterações (PowerShell retornou " + exit + ")", "error"));
+            }
+
+            try {
+                Thread.sleep(800); // garante propagação das variáveis de ambiente
+            } catch (InterruptedException ignored) {}
+
+            refreshTech(techType);
+        }).start();
+    }
+
+    // ---- Aplicação de versões (modular) -------------------------------------------------
+
+    private List<String> buildCommandsFor(String techType) {
         switch (techType) {
             case "JAVA":
-                if (selectedJava != null) {
-                    hasSelection = true;
-                    
-                    // 1. Salvar no arquivo global para os shims usarem
-                    command.append(String.format(
-                        "$configDir = \"$env:USERPROFILE\\.stackflipick\"; " +
-                        "if (!(Test-Path $configDir)) { New-Item -ItemType Directory -Path $configDir -Force | Out-Null }; " +
-                        "Set-Content -Path \"$configDir\\global-java.txt\" -Value '%s' -NoNewline; ",
-                        selectedJava.path));
-                    
-                    // 2. Configurar JAVA_HOME no registro
-                    command.append(String.format(
-                        "[System.Environment]::SetEnvironmentVariable('JAVA_HOME', '%s', 'User'); ",
-                        selectedJava.path));
-                    
-                    // 3. Garantir que shims estão no PATH do usuário (antes de tudo)
-                    command.append(
-                        "$shimsPath = \"$env:USERPROFILE\\.stackflipick\\shims\"; " +
-                        "$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User'); " +
-                        "if ($userPath -notlike \"*$shimsPath*\") { " +
-                        "    $userPath = \"$shimsPath;$userPath\"; " +
-                        "}; " +
-                        "$cleanPath = ($userPath -split ';' | Where-Object { $_ -and $_ -notmatch '(?i)Eclipse Adoptium.*?bin|Java.*?bin' } | Select-Object -Unique) -join ';'; " +
-                        "[System.Environment]::SetEnvironmentVariable('Path', $cleanPath, 'User'); ");
+                return buildJavaCommands();
+            case "NODE":
+                return buildNodeCommands();
+            case "DOTNET":
+                return buildDotnetCommands();
+            case "PYTHON":
+                return buildPythonCommands();
+            case "MAVEN":
+                return buildMavenCommands();
+            default:
+                return java.util.Collections.emptyList();
+        }
+    }
+
+    private List<String> buildJavaCommands() {
+        if (selectedJava == null) return java.util.Collections.emptyList();
+        List<String> cmds = new ArrayList<>();
+        cmds.add("$configDir = Join-Path $env:USERPROFILE '.stackflipick'");
+        cmds.add("if (!(Test-Path $configDir)) { New-Item -ItemType Directory -Path $configDir -Force | Out-Null }");
+        cmds.add(String.format("Set-Content -Path (Join-Path $configDir 'global-java.txt') -Value '%s' -NoNewline", selectedJava.path));
+        cmds.add(String.format("[System.Environment]::SetEnvironmentVariable('JAVA_HOME', '%s', 'User')", selectedJava.path));
+        cmds.add("$shimsPath = Join-Path $configDir 'shims'");
+        cmds.add("if (!(Test-Path $shimsPath)) { New-Item -ItemType Directory -Path $shimsPath -Force | Out-Null }");
+        cmds.add("$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')");
+        cmds.add("if ($userPath -notlike ('*' + $shimsPath + '*')) { $userPath = \"$shimsPath;$userPath\" }");
+        cmds.add("$javaBin = Join-Path '" + selectedJava.path + "' 'bin'");
+        cmds.add("$cleanPath = $userPath -split ';' | Where-Object { $_ -and $_ -notmatch '(?i)(Eclipse Adoptium|Java|OpenJDK|Temurin|javapath).*?bin' } | Select-Object -Unique");
+        cmds.add("$finalPath = ($shimsPath, $javaBin) + $cleanPath");
+        cmds.add("$finalPath = ($finalPath -join ';').Trim(';')");
+        cmds.add("[System.Environment]::SetEnvironmentVariable('Path', $finalPath, 'User')");
+
+        // Tenta também ajustar PATH/JAVA_HOME do Sistema (requer admin; falhas são ignoradas)
+        cmds.add("try {");
+        cmds.add("  $machinePath = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')");
+        cmds.add("  $mClean = $machinePath -split ';' | Where-Object { $_ -and $_ -notmatch '(?i)(Eclipse Adoptium|Java|OpenJDK|Temurin|javapath).*?bin' } | Select-Object -Unique");
+        cmds.add("  $mFinal = @($javaBin) + $mClean");
+        cmds.add("  [System.Environment]::SetEnvironmentVariable('Path', ($mFinal -join ';').Trim(';'), 'Machine')");
+        cmds.add("  [System.Environment]::SetEnvironmentVariable('JAVA_HOME', $javaHome, 'Machine')");
+        cmds.add("} catch { }");
+        return cmds;
+    }
+
+    private List<String> buildNodeCommands() {
+        if (selectedNode == null) return java.util.Collections.emptyList();
+        List<String> cmds = new ArrayList<>();
+        cmds.add("$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')");
+        cmds.add(String.format("$newPath = ('%s;' + ($userPath -replace '(?i)C:\\\\Program Files.*?nodejs;', ''))", selectedNode.path));
+        cmds.add("[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User')");
+        return cmds;
+    }
+
+    private List<String> buildDotnetCommands() {
+        if (selectedDotNet == null) return java.util.Collections.emptyList();
+        List<String> cmds = new ArrayList<>();
+        cmds.add("[System.Environment]::SetEnvironmentVariable('DOTNET_ROOT', 'C:\\\\Program Files\\\\dotnet', 'User')");
+        return cmds;
+    }
+
+    private List<String> buildPythonCommands() {
+        if (selectedPython == null) return java.util.Collections.emptyList();
+        List<String> cmds = new ArrayList<>();
+        cmds.add(String.format("[System.Environment]::SetEnvironmentVariable('PYTHON_HOME', '%s', 'User')", selectedPython.path));
+        cmds.add("$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')");
+        cmds.add(String.format("$newPath = ('%s;%s\\\\Scripts;' + ($userPath -replace '(?i)C:\\\\(Python|Program Files.*?Python).*?;', '').Trim(';'))",
+            selectedPython.path, selectedPython.path));
+        cmds.add("[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User')");
+        return cmds;
+    }
+
+    private List<String> buildMavenCommands() {
+        if (selectedMaven == null) return java.util.Collections.emptyList();
+        List<String> cmds = new ArrayList<>();
+        cmds.add(String.format("[System.Environment]::SetEnvironmentVariable('MAVEN_HOME', '%s', 'User')", selectedMaven.path));
+        cmds.add(String.format("[System.Environment]::SetEnvironmentVariable('M2_HOME', '%s', 'User')", selectedMaven.path));
+        cmds.add("$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')");
+        cmds.add(String.format("$newPath = ('%s\\\\bin;' + ($userPath -replace '(?i)C:\\\\.*?maven.*?\\\\bin;', ''))", selectedMaven.path));
+        cmds.add("[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User')");
+        return cmds;
+    }
+
+    private int runPowerShell(List<String> commands) {
+        if (commands.isEmpty()) return -1;
+        // Usa ProcessBuilder para evitar problemas de aspas e capturar saída/erro
+        String script = String.join("; ", commands);
+        ProcessBuilder pb = new ProcessBuilder(
+            "powershell", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script);
+        pb.redirectErrorStream(true);
+        try {
+            Process p = pb.start();
+            // Consumir output para evitar deadlock e facilitar debug
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    System.out.println("[PS] " + line);
                 }
+            }
+            return p.waitFor();
+        } catch (Exception e) {
+            javafx.application.Platform.runLater(() ->
+                showStatus("❌ Erro ao executar PowerShell: " + e.getMessage(), "error"));
+            return -1;
+        }
+    }
+
+    private void refreshTech(String techType) {
+        switch (techType) {
+            case "JAVA":
+                detectJavaVersions();
+                javafx.application.Platform.runLater(() -> {
+                    updateCurrentJavaLabel();
+                    renderJavaVersions();
+                });
                 break;
             case "NODE":
-                if (selectedNode != null) {
-                    hasSelection = true;
-                    command.append(String.format(
-                        "$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User'); " +
-                        "$newPath = ('%s;' + ($userPath -replace '(?i)C:\\\\\\\\Program Files.*?nodejs;', '')); " +
-                        "[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User'); ",
-                        selectedNode.path.replace("\\", "\\\\")));
-                }
+                detectNodeVersions();
+                javafx.application.Platform.runLater(() -> {
+                    updateCurrentNodeLabel();
+                    renderNodeVersions();
+                });
                 break;
             case "DOTNET":
-                if (selectedDotNet != null) {
-                    hasSelection = true;
-                    command.append("[System.Environment]::SetEnvironmentVariable('DOTNET_ROOT', 'C:\\Program Files\\dotnet', 'User'); ");
-                }
+                detectDotNetVersions();
+                javafx.application.Platform.runLater(() -> {
+                    updateCurrentDotNetLabel();
+                    renderDotNetVersions();
+                });
                 break;
             case "PYTHON":
-                if (selectedPython != null) {
-                    hasSelection = true;
-                    command.append(String.format(
-                        "[System.Environment]::SetEnvironmentVariable('PYTHON_HOME', '%s', 'User'); ",
-                        selectedPython.path));
-                    command.append(String.format(
-                        "$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User'); " +
-                        "$newPath = ('%s;%s\\Scripts;' + ($userPath -replace '(?i)C:\\\\\\\\(Python|Program Files.*?Python).*?;', '').Trim(';')); " +
-                        "[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User'); ",
-                        selectedPython.path.replace("\\", "\\\\"),
-                        selectedPython.path.replace("\\", "\\\\")));
-                }
+                detectPythonVersions();
+                javafx.application.Platform.runLater(() -> {
+                    updateCurrentPythonLabel();
+                    renderPythonVersions();
+                });
                 break;
             case "MAVEN":
-                if (selectedMaven != null) {
-                    hasSelection = true;
-                    command.append(String.format(
-                        "[System.Environment]::SetEnvironmentVariable('MAVEN_HOME', '%s', 'User'); ",
-                        selectedMaven.path));
-                    command.append(String.format(
-                        "[System.Environment]::SetEnvironmentVariable('M2_HOME', '%s', 'User'); ",
-                        selectedMaven.path));
-                    command.append(String.format(
-                        "$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User'); " +
-                        "$newPath = ('%s\\bin;' + ($userPath -replace '(?i)C:\\\\\\\\.*?maven.*?\\\\\\\\bin;', '')); " +
-                        "[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User'); ",
-                        selectedMaven.path.replace("\\", "\\\\")));
-                }
+                detectMavenVersions();
+                javafx.application.Platform.runLater(() -> {
+                    updateCurrentMavenLabel();
+                    renderMavenVersions();
+                });
                 break;
-        }
-
-        if (!hasSelection) {
-            showStatus("⚠️ Selecione uma versão", "warning");
-            return;
-        }
-
-        command.append("\"");
-
-        try {
-            Process process = Runtime.getRuntime().exec(command.toString());
-            process.waitFor();
-            showStatus("✅ Alterações aplicadas! Reinicie o terminal/IDE.", "success");
-            
-            // Atualizar o status da versão atual e re-detectar versões após aplicar mudanças
-            new Thread(() -> {
-                try {
-                    // Delay para garantir que as variáveis foram atualizadas
-                    Thread.sleep(800);
-                    
-                    // Re-detectar versões e atualizar UI
-                    switch (techType) {
-                        case "JAVA":
-                            detectJavaVersions();
-                            javafx.application.Platform.runLater(() -> {
-                                updateCurrentJavaLabel();
-                                renderJavaVersions();
-                            });
-                            break;
-                        case "NODE":
-                            detectNodeVersions();
-                            javafx.application.Platform.runLater(() -> {
-                                updateCurrentNodeLabel();
-                                renderNodeVersions();
-                            });
-                            break;
-                        case "DOTNET":
-                            detectDotNetVersions();
-                            javafx.application.Platform.runLater(() -> {
-                                updateCurrentDotNetLabel();
-                                renderDotNetVersions();
-                            });
-                            break;
-                        case "PYTHON":
-                            detectPythonVersions();
-                            javafx.application.Platform.runLater(() -> {
-                                updateCurrentPythonLabel();
-                                renderPythonVersions();
-                            });
-                            break;
-                        case "MAVEN":
-                            detectMavenVersions();
-                            javafx.application.Platform.runLater(() -> {
-                                updateCurrentMavenLabel();
-                                renderMavenVersions();
-                            });
-                            break;
-                    }
-                } catch (InterruptedException e) {
-                    // Ignorar
-                }
-            }).start();
-            
-        } catch (Exception e) {
-            showStatus("❌ Erro: " + e.getMessage(), "error");
         }
     }
 
