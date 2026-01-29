@@ -837,8 +837,7 @@ public class VersionManagerApp extends Application {
                         selectedJava.path));
                     command.append(String.format(
                         "$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User'); " +
-                        "$cleanPath = ($userPath -split ';' | Where-Object { $_ -notmatch '(?i)Eclipse Adoptium.*?bin|Java.*?bin' }) -join ';'; " +
-                        "$newPath = '%s\\bin;' + $cleanPath; " +
+                        "$newPath = ('%s\\bin;' + ($userPath -replace '(?i)C:\\\\\\\\Program Files.*?Java.*?\\\\\\\\bin;', '')); " +
                         "[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User'); ",
                         selectedJava.path.replace("\\", "\\\\")));
                 }
