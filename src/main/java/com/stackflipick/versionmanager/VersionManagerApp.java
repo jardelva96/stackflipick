@@ -19,6 +19,9 @@ import java.util.HashMap;
 import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.stackflipick.versionmanager.model.*;
+import com.stackflipick.versionmanager.config.ProjectProfile;
+import com.stackflipick.versionmanager.config.ProfilesData;
 
 public class VersionManagerApp extends Application {
     
@@ -588,7 +591,7 @@ public class VersionManagerApp extends Application {
         
         detectJavaVersions();
         for (JavaVersion v : javaVersions) {
-            versionCombo.getItems().add(v.version + " - " + v.name);
+            versionCombo.getItems().add(v.getVersion() + " - " + v.getName());
         }
 
         HBox buttonBox = new HBox(10);
@@ -657,8 +660,8 @@ public class VersionManagerApp extends Application {
     
     private String getVersionPathByNumber(String versionNumber) {
         for (JavaVersion v : javaVersions) {
-            if (v.version.startsWith(versionNumber)) {
-                return v.path;
+            if (v.getVersion().startsWith(versionNumber)) {
+                return v.getPath();
             }
         }
         return "";
@@ -668,27 +671,27 @@ public class VersionManagerApp extends Application {
         switch (techType) {
             case "java":
                 for (JavaVersion v : javaVersions) {
-                    if ((v.name + " (" + v.version + ")").equals(versionName)) return v.path;
+                    if ((v.getName() + " (" + v.getVersion() + ")").equals(versionName)) return v.getPath();
                 }
                 break;
             case "node":
                 for (NodeVersion v : nodeVersions) {
-                    if ((v.name + " (" + v.version + ")").equals(versionName)) return v.path;
+                    if ((v.getName() + " (" + v.getVersion() + ")").equals(versionName)) return v.getPath();
                 }
                 break;
             case "python":
                 for (PythonVersion v : pythonVersions) {
-                    if ((v.name + " (" + v.version + ")").equals(versionName)) return v.path;
+                    if ((v.getName() + " (" + v.getVersion() + ")").equals(versionName)) return v.getPath();
                 }
                 break;
             case "dotnet":
                 for (DotNetVersion v : dotnetVersions) {
-                    if ((v.name + " (" + v.version + ")").equals(versionName)) return v.path;
+                    if ((v.getName() + " (" + v.getVersion() + ")").equals(versionName)) return v.getPath();
                 }
                 break;
             case "maven":
                 for (MavenVersion v : mavenVersions) {
-                    if ((v.name + " (" + v.version + ")").equals(versionName)) return v.path;
+                    if ((v.getName() + " (" + v.getVersion() + ")").equals(versionName)) return v.getPath();
                 }
                 break;
         }
@@ -918,13 +921,13 @@ public class VersionManagerApp extends Application {
         List<String> cmds = new ArrayList<>();
         cmds.add("$configDir = Join-Path $env:USERPROFILE '.stackflipick'");
         cmds.add("if (!(Test-Path $configDir)) { New-Item -ItemType Directory -Path $configDir -Force | Out-Null }");
-        cmds.add(String.format("Set-Content -Path (Join-Path $configDir 'global-java.txt') -Value '%s' -NoNewline", selectedJava.path));
-        cmds.add(String.format("[System.Environment]::SetEnvironmentVariable('JAVA_HOME', '%s', 'User')", selectedJava.path));
+        cmds.add(String.format("Set-Content -Path (Join-Path $configDir 'global-java.txt') -Value '%s' -NoNewline", selectedJava.getPath()));
+        cmds.add(String.format("[System.Environment]::SetEnvironmentVariable('JAVA_HOME', '%s', 'User')", selectedJava.getPath()));
         cmds.add("$shimsPath = Join-Path $configDir 'shims'");
         cmds.add("if (!(Test-Path $shimsPath)) { New-Item -ItemType Directory -Path $shimsPath -Force | Out-Null }");
         cmds.add("$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')");
         cmds.add("if ($userPath -notlike ('*' + $shimsPath + '*')) { $userPath = \"$shimsPath;$userPath\" }");
-        cmds.add("$javaBin = Join-Path '" + selectedJava.path + "' 'bin'");
+        cmds.add("$javaBin = Join-Path '" + selectedJava.getPath() + "' 'bin'");
         cmds.add("$cleanPath = $userPath -split ';' | Where-Object { $_ -and $_ -notmatch '(?i)(Eclipse Adoptium|Java|OpenJDK|Temurin|javapath).*?bin' } | Select-Object -Unique");
         cmds.add("$finalPath = ($shimsPath, $javaBin) + $cleanPath");
         cmds.add("$finalPath = ($finalPath -join ';').Trim(';')");
@@ -945,7 +948,7 @@ public class VersionManagerApp extends Application {
         if (selectedNode == null) return java.util.Collections.emptyList();
         List<String> cmds = new ArrayList<>();
         cmds.add("$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')");
-        cmds.add(String.format("$newPath = ('%s;' + ($userPath -replace '(?i)C:\\\\Program Files.*?nodejs;', ''))", selectedNode.path));
+        cmds.add(String.format("$newPath = ('%s;' + ($userPath -replace '(?i)C:\\\\Program Files.*?nodejs;', ''))", selectedNode.getPath()));
         cmds.add("[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User')");
         return cmds;
     }
@@ -960,10 +963,10 @@ public class VersionManagerApp extends Application {
     private List<String> buildPythonCommands() {
         if (selectedPython == null) return java.util.Collections.emptyList();
         List<String> cmds = new ArrayList<>();
-        cmds.add(String.format("[System.Environment]::SetEnvironmentVariable('PYTHON_HOME', '%s', 'User')", selectedPython.path));
+        cmds.add(String.format("[System.Environment]::SetEnvironmentVariable('PYTHON_HOME', '%s', 'User')", selectedPython.getPath()));
         cmds.add("$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')");
         cmds.add(String.format("$newPath = ('%s;%s\\\\Scripts;' + ($userPath -replace '(?i)C:\\\\(Python|Program Files.*?Python).*?;', '').Trim(';'))",
-            selectedPython.path, selectedPython.path));
+            selectedPython.getPath(), selectedPython.getPath()));
         cmds.add("[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User')");
         return cmds;
     }
@@ -971,10 +974,10 @@ public class VersionManagerApp extends Application {
     private List<String> buildMavenCommands() {
         if (selectedMaven == null) return java.util.Collections.emptyList();
         List<String> cmds = new ArrayList<>();
-        cmds.add(String.format("[System.Environment]::SetEnvironmentVariable('MAVEN_HOME', '%s', 'User')", selectedMaven.path));
-        cmds.add(String.format("[System.Environment]::SetEnvironmentVariable('M2_HOME', '%s', 'User')", selectedMaven.path));
+        cmds.add(String.format("[System.Environment]::SetEnvironmentVariable('MAVEN_HOME', '%s', 'User')", selectedMaven.getPath()));
+        cmds.add(String.format("[System.Environment]::SetEnvironmentVariable('M2_HOME', '%s', 'User')", selectedMaven.getPath()));
         cmds.add("$userPath = [System.Environment]::GetEnvironmentVariable('Path', 'User')");
-        cmds.add(String.format("$newPath = ('%s\\\\bin;' + ($userPath -replace '(?i)C:\\\\.*?maven.*?\\\\bin;', ''))", selectedMaven.path));
+        cmds.add(String.format("$newPath = ('%s\\\\bin;' + ($userPath -replace '(?i)C:\\\\.*?maven.*?\\\\bin;', ''))", selectedMaven.getPath()));
         cmds.add("[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'User')");
         return cmds;
     }
@@ -1585,28 +1588,24 @@ public class VersionManagerApp extends Application {
         });
     }
 
-    private VBox createVersionCard(Object version) {
+    private VBox createVersionCard(Version version) {
         VBox card = new VBox(6);
         card.setPadding(new Insets(12));
         card.setMaxWidth(Double.MAX_VALUE);
         
-        final boolean isCurrent = version instanceof JavaVersion ? ((JavaVersion)version).isCurrent :
-                                 version instanceof NodeVersion ? ((NodeVersion)version).isCurrent :
-                                 version instanceof DotNetVersion ? ((DotNetVersion)version).isCurrent :
-                                 version instanceof PythonVersion ? ((PythonVersion)version).isCurrent :
-                                 version instanceof MavenVersion ? ((MavenVersion)version).isCurrent : false;
+        final boolean isCurrent = version.isCurrent();
         
         final boolean isSelected;
         if (version instanceof JavaVersion) {
-            isSelected = selectedJava != null && selectedJava.path.equals(((JavaVersion)version).path);
+            isSelected = selectedJava != null && selectedJava.getPath().equals(version.getPath());
         } else if (version instanceof NodeVersion) {
-            isSelected = selectedNode != null && selectedNode.path.equals(((NodeVersion)version).path);
+            isSelected = selectedNode != null && selectedNode.getPath().equals(version.getPath());
         } else if (version instanceof DotNetVersion) {
-            isSelected = selectedDotNet != null && selectedDotNet.path.equals(((DotNetVersion)version).path);
+            isSelected = selectedDotNet != null && selectedDotNet.getPath().equals(version.getPath());
         } else if (version instanceof PythonVersion) {
-            isSelected = selectedPython != null && selectedPython.path.equals(((PythonVersion)version).path);
+            isSelected = selectedPython != null && selectedPython.getPath().equals(version.getPath());
         } else if (version instanceof MavenVersion) {
-            isSelected = selectedMaven != null && selectedMaven.path.equals(((MavenVersion)version).path);
+            isSelected = selectedMaven != null && selectedMaven.getPath().equals(version.getPath());
         } else {
             isSelected = false;
         }
@@ -1620,21 +1619,9 @@ public class VersionManagerApp extends Application {
         
         card.setStyle(baseStyle);
 
-        final String name = version instanceof JavaVersion ? ((JavaVersion)version).name :
-                           version instanceof NodeVersion ? ((NodeVersion)version).name :
-                           version instanceof DotNetVersion ? ((DotNetVersion)version).name :
-                           version instanceof PythonVersion ? ((PythonVersion)version).name :
-                           version instanceof MavenVersion ? ((MavenVersion)version).name : "";
-        String path = version instanceof JavaVersion ? ((JavaVersion)version).path :
-                     version instanceof NodeVersion ? ((NodeVersion)version).path :
-                     version instanceof DotNetVersion ? ((DotNetVersion)version).path :
-                     version instanceof PythonVersion ? ((PythonVersion)version).path :
-                     version instanceof MavenVersion ? ((MavenVersion)version).path : "";
-        String versionStr = version instanceof JavaVersion ? ((JavaVersion)version).version :
-                           version instanceof NodeVersion ? ((NodeVersion)version).version :
-                           version instanceof DotNetVersion ? ((DotNetVersion)version).version :
-                           version instanceof PythonVersion ? ((PythonVersion)version).version :
-                           version instanceof MavenVersion ? ((MavenVersion)version).version : "";
+        final String name = version.getName();
+        String path = version.getPath();
+        String versionStr = version.getVersion();
 
         HBox headerBox = new HBox(8);
         headerBox.setAlignment(Pos.CENTER_LEFT);
@@ -1755,98 +1742,6 @@ public class VersionManagerApp extends Application {
                 }
             }).start();
         }
-    }
-
-    static class JavaVersion {
-        String name;
-        String path;
-        String version;
-        boolean isCurrent;
-
-        JavaVersion(String name, String path, String version, boolean isCurrent) {
-            this.name = name;
-            this.path = path;
-            this.version = version;
-            this.isCurrent = isCurrent;
-        }
-    }
-
-    static class NodeVersion {
-        String name;
-        String path;
-        String version;
-        boolean isCurrent;
-
-        NodeVersion(String name, String path, String version, boolean isCurrent) {
-            this.name = name;
-            this.path = path;
-            this.version = version;
-            this.isCurrent = isCurrent;
-        }
-    }
-
-    static class DotNetVersion {
-        String name;
-        String path;
-        String version;
-        boolean isCurrent;
-
-        DotNetVersion(String name, String path, String version, boolean isCurrent) {
-            this.name = name;
-            this.path = path;
-            this.version = version;
-            this.isCurrent = isCurrent;
-        }
-    }
-
-    static class PythonVersion {
-        String name;
-        String path;
-        String version;
-        boolean isCurrent;
-
-        PythonVersion(String name, String path, String version, boolean isCurrent) {
-            this.name = name;
-            this.path = path;
-            this.version = version;
-            this.isCurrent = isCurrent;
-        }
-    }
-
-    static class MavenVersion {
-        String name;
-        String path;
-        String version;
-        boolean isCurrent;
-
-        MavenVersion(String name, String path, String version, boolean isCurrent) {
-            this.name = name;
-            this.path = path;
-            this.version = version;
-            this.isCurrent = isCurrent;
-        }
-    }
-
-    static class ProjectProfile {
-        public String projectName;
-        public String projectPath;
-        public String techType; // "java", "node", "python", "dotnet", "maven"
-        public String versionName;
-        public String versionPath;
-
-        public ProjectProfile() {}
-
-        public ProjectProfile(String projectName, String projectPath, String techType, String versionName, String versionPath) {
-            this.projectName = projectName;
-            this.projectPath = projectPath;
-            this.techType = techType;
-            this.versionName = versionName;
-            this.versionPath = versionPath;
-        }
-    }
-
-    static class ProfilesData {
-        public List<ProjectProfile> profiles = new ArrayList<>();
     }
 
     public static void main(String[] args) {
